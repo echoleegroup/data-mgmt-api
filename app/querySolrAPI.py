@@ -11,6 +11,10 @@ def queryInfoBetweenTimestampSPC0(coreName, startTs, endTs):
     print(condition)
     return queryInfo(condition)
 
+def queryMachinestate(coreName):
+    condition = coreName + '/select?q=*:*&fl=machinestate,timestamp&sort=timestamp desc&rows=1'
+    print(condition)
+    return queryInfo(condition)
 
 def queryInfo(selectCondition):
     solrHostname = socket.gethostbyname(socket.gethostname())
