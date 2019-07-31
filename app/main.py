@@ -12,38 +12,24 @@ def main():
     dataList = ["spc", "Machine status", "history record", "alarm record", "futaba"]
     return render_template('index.html', dataList=dataList)
 
-# @app.route('/getStock/<string:stockid>/<int:year>/<int:monthStart>/<int:monthEnd>')
-# def getStock(stockid, year, monthStart, monthEnd):
-#     return crawler.getStock(stockid, year, monthStart, monthEnd)
-
-
-# @app.route('/queryFixedSourceAllForUITest', methods = ['POST'])
-# def queryFixedSourceAllForUITest():
-#     sourceInfo = request.form
-#     print(sourceInfo['data_category'])
-#     # source = queryInfoAll(sourceInfo['data_category'])
-#     source = queryFixedSourceAll(sourceInfo['data_category'])
-#     return source
-
 #http://localhost:8983/solr/spc/select?fl=spc_0&fq=timestamp:[2019-07-26T05:42:59Z TO 2019-07-26T05:43:00Z]&q=*:*
-#http://localhost:80/queryInfoBetweenTimestampSPC0/spc/2019-07-25/2019-07-26
-@app.route('/queryInfoBetweenTimestampSPC0/<string:data_category>/<string:start_ts>/<string:end_ts>', methods = ['GET'])
+#http://localhost:80/queryInfoBetweenTimestampSPC0/spc/20190725/20190726
+#http://10.57.199.65:80/queryInfoBetweenTimestampSPC0/spc/20190726/20190727
+@app.route('/queryInfoBetweenTimestampSPC0/<string:data_category>/<string:start_ts>/<string:end_ts>/', methods = ['GET'])
 def queryFixedInfoBetweenTimestampSPC0(data_category, start_ts, end_ts):
     source = queryInfoBetweenTimestampSPC0(data_category, start_ts, end_ts)
     return source
 
-
-#@app.route('/getMA', methods = ['POST', 'GET'])
-@app.route('/queryFixedSourceAllForUITest', methods = ['POST'])
+@app.route('/queryFixedSourceAllForUITest/', methods = ['POST'])
 def queryFixedSourceAllForUITest():
     sourceInfo = request.form
     print(sourceInfo['data_category'])
-    # source = queryInfoAll(sourceInfo['data_category'])
     source = queryFixedSourceAll(sourceInfo['data_category'])
     return source
 
+#http://10.57.199.65:80/queryFixedSourceAll/spc
 #http://localhost:80/queryFixedSourceAll/spc
-@app.route('/queryFixedSourceAll/<string:data_category>', methods = ['GET'])
+@app.route('/queryFixedSourceAll/<string:data_category>/', methods = ['GET'])
 def queryFixedSourceAll(data_category):
     source = queryInfoAll(data_category)
     return source
