@@ -1,6 +1,7 @@
 import socket
 import requests
 import json
+import os
 
 def queryInfoAll(coreName):
     condition = coreName + '/select?q=*:*&sort=timestamp desc'
@@ -8,18 +9,16 @@ def queryInfoAll(coreName):
 
 def queryInfoBetweenTimestampSPC0(coreName, startTs, endTs):
     condition = coreName + '/select?q=*:*&fl=spc_0&fq=timestamp:[' + substringStartDate(startTs) + ' TO ' + substringEndDate(endTs) + ']&sort=spc_0 asc'
-    print(condition)
     return queryInfo(condition)
 
 def queryMachinestate(coreName):
     condition = coreName + '/select?q=*:*&fl=machinestate,timestamp&sort=timestamp desc&rows=1'
-    print(condition)
     return queryInfo(condition)
 
 def queryInfo(selectCondition):
-    solrHostname = socket.gethostbyname(socket.gethostname())
-    res = requests.get("http://" + solrHostname + ":" + "8983" + "/solr/" + selectCondition)
-    print(res.text)
+    # solrHostname = socket.gethostbyname(socket.gethostname())
+    # res = requests.get("http://" + solrHostname + ":" + "8983" + "/solr/" + selectCondition)
+    res = requests.get("http://localhost:" + "8983" + "/solr/" + selectCondition)
     return res.text
 
 def substring(date):
