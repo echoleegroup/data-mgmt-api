@@ -8,6 +8,5 @@ http://10.57.232.105:33000/queryFixedSourceAll/spc/
 http://10.57.232.105:33000/queryInfoBetweenTimestampSPC0/spc/20190726/20190727/  
 3. 查詢machine status  
 http://10.57.232.105:33000/queryMachinestate/machinestatus/  
-
-4. 查詢燈號
-http://10.57.232.105:33000/checkLightStatus/
+4. 查詢燈號  
+http://10.57.232.105:33000/checkLightStatus/  
