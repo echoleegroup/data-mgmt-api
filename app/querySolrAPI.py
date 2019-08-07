@@ -2,14 +2,21 @@ import socket
 import requests
 import json
 import os
+from utils import substring, getTotalRowsBetweenTwoTimestamp
 
 def queryInfoAll(coreName):
     condition = coreName + '/select?q=*:*&sort=timestamp desc'
     return queryInfo(condition)
 
 def queryInfoBetweenTimestampSPC0(coreName, startTs, endTs):
-    condition = coreName + '/select?q=*:*&fl=spc_0&fq=timestamp:[' + substringStartDate(startTs) + ' TO ' + substringEndDate(endTs) + ']&sort=spc_0 asc'
-    return queryInfo(condition)
+    startTs = startTs + '000000'
+    endTs = endTs + '235959'
+    rows = getTotalRowsBetweenTwoTimestamp(startTs, endTs)
+
+    condition = coreName + '/select?q=*:*&fl=spc_0,timestamp,id_timestamp&fq=timestamp:[' + substring(startTs) + ' TO ' + substring(endTs) + ']&sort=spc_0 asc&rows=' + str(rows)
+    print(condition)
+    response = queryInfo(condition)
+    return response
 
 def queryMachinestate(coreName):
     condition = coreName + '/select?q=*:*&fl=machinestate,timestamp&sort=timestamp desc&rows=1'
@@ -18,14 +25,6 @@ def queryMachinestate(coreName):
 def queryInfo(selectCondition):
     # solrHostname = socket.gethostbyname(socket.gethostname())
     # res = requests.get("http://" + solrHostname + ":" + "8983" + "/solr/" + selectCondition)
-    res = requests.get("http://localhost:" + "8983" + "/solr/" + selectCondition)
+    res = requests.get("http://10.57.232.105:" + "8983" + "/solr/" + selectCondition)
+    #res = requests.get("http://localhost:" + "8983" + "/solr/" + selectCondition)
     return res.text
-
-def substring(date):
-    return date[0:4] + "-" + date[4:6] + "-" + date[6:8]
-
-def substringStartDate(date):
-    return substring(date) + 'T00:00:00Z'
-
-def substringEndDate(date):
-    return substring(date) + 'T23:59:59Z'

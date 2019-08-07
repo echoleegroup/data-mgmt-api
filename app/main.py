@@ -1,8 +1,7 @@
 import os
 import json
 from querySolrAPI import queryInfoAll,queryInfoBetweenTimestampSPC0, queryMachinestate
-from queryCollectorAPI import checkPing, checkConnect
-from utils import praseJsonFormat
+from service import queryLightStatus, genDailyReport
 
 from flask import Flask, send_file, render_template, request, url_for
 from flask_bootstrap import Bootstrap
@@ -15,12 +14,15 @@ def main():
     dataList = ["spc", "Machine status", "history record", "alarm record", "futaba"]
     return render_template('index.html', dataList=dataList)
 
+#for ui test-----start
 @app.route('/queryFixedSourceAllForUITest/', methods = ['POST'])
 def queryFixedSourceAllForUITest():
     sourceInfo = request.form
     print(sourceInfo['data_category'])
     source = queryFixedSourceAll(sourceInfo['data_category'])
     return source
+#for ui test-----end
+
 
 #http://localhost:33000/queryFixedSourceAll/spc
 #http://10.57.232.105:33000/queryFixedSourceAll/spc
@@ -42,43 +44,51 @@ def queryFixedMachinestate(data_category):
     source = queryMachinestate(data_category)
     return source
 
+#daily report-----start
+@app.route('/queryDailyReport/<string:data_category>/<string:start_ts>/<string:end_ts>/', methods = ['GET'])
+def queryDailyReport(data_category, start_ts, end_ts):
+    source = genDailyReport(data_category, start_ts, end_ts)
+    return source
+#daily report-----end
+
 #燈號顯示-----start
-@app.route('/checkLightStatus/', methods = ['GET'])
-def queryLightStatus():
-    try:
-        responseData = {}
-        responseData['responseCode'] = 200
-        responseData['responseMessage'] = ''
-        result = {}
-        result['status'] = ''
-        #先判斷是否ping的到
-        pingStatus = checkPing()
-        if pingStatus == "False":
-            result['lightColor'] = 'Gray'
-            return parseResponseJson(responseData, result)
-        #再判斷是否連結的到collector
-        connectionStatus = checkConnect()
-        if connectionStatus == "False":
-            result['lightColor'] = 'Icon'
-            return parseResponseJson(responseData, result)
-        #query machine status
-        jsonObject = queryMachinestate('machinestatus')
-        machineStatus = praseJsonFormat(jsonObject)
-        result['status'] = machineStatus
-        if machineStatus == "全自動":
-            result['lightColor'] = 'Green'
-        else:
-            result['lightColor'] = 'Yellow'
-        return parseResponseJson(responseData, result)
-    except:
-        responseData['responseCode'] = 400
-        responseData['responseMessage'] = 'except'
-        return parseResponseJson(responseData, result)
+@app.route('/checkLightStatusByDataCollector/<string:data_collector>/', methods = ['GET'])
+def queryLightStatusByDataCollector(data_collector):
+    return queryLightStatus(data_collector)
 #燈號顯示-----end
 
-def parseResponseJson(responseData, result):
-    responseData['result'] = result
-    return json.dumps(responseData)
+# @app.route('/checkLightStatus/', methods = ['GET'])
+# def queryLightStatus():
+#     try:
+#         responseData = {}
+#         responseData['responseCode'] = 200
+#         responseData['responseMessage'] = ''
+#         result = {}
+#         result['status'] = ''
+#         #先判斷是否ping的到
+#         pingStatus = checkPing()
+#         if pingStatus == "False":
+#             result['lightColor'] = 'Gray'
+#             return parseResponseJson(responseData, result)
+#         #再判斷是否連結的到collector
+#         connectionStatus = checkConnect()
+#         if connectionStatus == "False":
+#             result['lightColor'] = 'Icon'
+#             return parseResponseJson(responseData, result)
+#         #query machine status
+#         jsonObject = queryMachinestate('machinestatus')
+#         machineStatus = praseJsonFormat(jsonObject)
+#         result['status'] = machineStatus
+#         if machineStatus == "全自動":
+#             result['lightColor'] = 'Green'
+#         else:
+#             result['lightColor'] = 'Yellow'
+#         return parseResponseJson(responseData, result)
+#     except:
+#         responseData['responseCode'] = 400
+#         responseData['responseMessage'] = 'except'
+#         return parseResponseJson(responseData, result)
+
 
 # Everything not declared before (not a Flask route / API endpoint)...
 @app.route('/<path:path>')

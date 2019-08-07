@@ -12,6 +12,6 @@ def checkConnect():
     return checkStatus(condition)
 
 def checkStatus(condition):
-    #res = requests.get("http://" + "10.57.232.105" + ":" + "32780" + "/" + condition)
-    res = requests.get("http://localhost:" + "32780" + "/" + condition)
+    res = requests.get("http://" + "10.57.232.105" + ":" + "32780" + "/" + condition)
+    #res = requests.get("http://localhost:" + "32780" + "/" + condition)
     return res.text
