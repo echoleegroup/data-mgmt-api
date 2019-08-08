@@ -9,8 +9,8 @@ def praseJsonFormat(jsonObject):
 def getTotalRowsBetweenTwoTimestamp(startTs, endTs):
     startDate = substringToDate(startTs)
     endDate = substringToDate(endTs)
-    tDelta = abs(startDate - endDate)
-    return math.ceil(tDelta.seconds/30)
+    tDelta = abs(startDate - endDate).total_seconds()
+    return math.ceil(tDelta/30)
 
 def substringToDate(dateStr):
     return datetime(int(dateStr[0:4]), int(dateStr[4:6]), int(dateStr[6:8]), int(dateStr[8:10]), int(dateStr[10:12]), int(dateStr[12:14]))
@@ -25,6 +25,6 @@ def substring(date):
 #     #return substring(date) + 'T23:59:59Z'
 #     return substring(date) + ':59Z'
 
-def parseResponseJson(responseData, result):
-    responseData['result'] = result
-    return json.dumps(responseData)
+# def parseResponseJson(responseData, result):
+#     responseData['result'] = result
+#     return json.dumps(responseData)
