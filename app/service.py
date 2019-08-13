@@ -11,49 +11,43 @@ def queryLightStatus(data_collector):
     responseData = initResponse()
     result = {}
     result['status'] = ''
-    try:
-        # responseData = {}
-        # responseData['responseCode'] = 200
-        # responseData['responseMessage'] = ''
-        # result = {}
-        # result['status'] = ''
-        #先判斷是否ping的到
-        pingStatus = checkPing()
-        if pingStatus == "False":
-            result['lightColor'] = 'Gray'
-            result['status'] = result['status'] + "ping=fail; "
-            return parseResponseJson(responseData, result)
-        else:
-            result['status'] = result['status'] + "ping=sucuess; "
-        #再判斷是否連結的到collector
-        connectionStatus = checkConnect()
-        if connectionStatus == "False":
-            result['lightColor'] = 'Icon'
-            result['status'] = result['status'] + "connection=fail; "
-            return parseResponseJson(responseData, result)
-        else:
-            result['status'] = result['status'] + "connection=sucuess; "
-        #query machine status
-        jsonObject = queryMachinestate('machinestatus')
-        data = praseJsonFormat(jsonObject)
-        machineStatus = data[0]['machinestate']
-        # if machineStatus == '全自動':
-        #     return 'automatic'
-        # elif machineStatus == '半自動':
-        #     return 'self-automatic'
-        # else:
-        #     return 'manual'
-        result['status'] = result['status'] + "machineStatus=" + machineStatus
-        if machineStatus == "全自動":
-            result['lightColor'] = 'Green'
-        else:
-            result['lightColor'] = 'Yellow'
+    # try:
+    #先判斷是否ping的到
+    pingStatus = checkPing(data_collector)
+    if pingStatus == "False":
+        result['lightColor'] = 'gray'
+        result['status'] = result['status'] + "ping=fail; "
         return parseResponseJson(responseData, result)
-    except:
-        setErrorResponse(responseData)
-        # responseData['responseCode'] = 400
-        # responseData['responseMessage'] = 'except'
+    else:
+        result['status'] = result['status'] + "ping=success; "
+    #再判斷是否連結的到collector
+    connectionStatus = checkConnect(data_collector)
+    if connectionStatus == "False":
+        result['lightColor'] = 'icon'
+        result['status'] = result['status'] + "connection=fail; "
         return parseResponseJson(responseData, result)
+    else:
+        result['status'] = result['status'] + "connection=success; "
+    #query machine status
+    jsonObject = queryMachinestate('machinestatus')
+    data = praseJsonFormat(jsonObject)
+    machineStatus = data[0]['machinestate']
+    # if machineStatus == '全自動':
+    #     return 'automatic'
+    # elif machineStatus == '半自動':
+    #     return 'self-automatic'
+    # else:
+    #     return 'manual'
+    result['status'] = result['status'] + "machineStatus=" + machineStatus
+    if machineStatus == "全自動":
+        result['lightColor'] = 'green'
+    else:
+        result['lightColor'] = 'yellow'
+    return parseResponseJson(responseData, result)
+    # except:
+    #     print("queryLightStatus exception")
+    #     setErrorResponse(responseData)
+    #     return parseResponseJson(responseData, result)
 
 
 def genDailyReport(coreName, startTs, endTs):
@@ -116,7 +110,7 @@ def genDailyReport(coreName, startTs, endTs):
 
         return parseResponseJson(responseData, result)
     except:
-        print("exception")
+        print("genDailyReport exception")
         setErrorResponse(responseData)
         # responseData['responseCode'] = 400
         # responseData['responseMessage'] = 'except'

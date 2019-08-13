@@ -3,6 +3,7 @@ import requests
 import json
 import os
 from utils import substring, getTotalRowsBetweenTwoTimestamp
+from settings import SOLR_PORT, ENV
 
 def queryInfoAll(coreName):
     condition = coreName + '/select?q=*:*&sort=timestamp desc'
@@ -21,9 +22,9 @@ def queryMachinestate(coreName):
     return queryInfo(condition)
 
 def queryInfo(selectCondition):
-    # solrHostname = socket.gethostbyname(socket.gethostname())
-    # res = requests.get("http://" + solrHostname + ":" + "8983" + "/solr/" + selectCondition)
     print(selectCondition)
-    res = requests.get("http://10.57.232.105:" + "8983" + "/solr/" + selectCondition)
-    #res = requests.get("http://localhost:" + "8983" + "/solr/" + selectCondition)
+    ip = "localhost"
+    if ENV == "dev": #測試機
+        ip = "10.57.232.105"
+    res = requests.get("http://" + ip + ":" + SOLR_PORT + "/solr/" + selectCondition)
     return res.text
