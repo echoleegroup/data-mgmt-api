@@ -1,18 +1,29 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from settings import LOG_LEVEL, LOG_PATH, LOG_FILE_NAME
+from datetime import datetime
+#def setLog():
 
-def setLog():
-    logger = logging.getLogger()
-    #logger.setLevel(LOG_LEVEL)
-    #fh = logging.FileHandler(LOG_FILE_NAME)
-    #fh.setLevel(LOG_LEVEL)
-    #formatter = logging.Formatter(log_format)
-    #fh.setFormatter(formatter)
-    #logger.addHandler(fh)
+# 基礎設定
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+                    datefmt='%m-%d %H:%M',
+                    handlers=[logging.FileHandler('{}/{:%Y-%m-%d}.log'.format(LOG_PATH, datetime.now()), 'a', 'utf-8')])
 
-    #logname = "dataservice.log"
-    handler = TimedRotatingFileHandler(filename='{}/{}'.format(LOG_PATH, LOG_FILE_NAME), when="midnight", interval=1)
-    handler.suffix = "%Y%m%d"
-    logger.addHandler(handler)
-    return logger
+# loghandler = logging.handlers.TimedRotatingFileHandler(filename='{}/{}'.format(LOG_PATH, LOG_FILE_NAME), when="midnight", interval=1)
+# loghandler.setLevel(logging.DEBUG)
+# fileformatter = logging.Formatter('%(asctime)s - [%(levelname)s] >>> %(message)s')
+# loghandler.setFormatter(fileformatter)
+# logging.getLogger('').addHandler(loghandler)
+
+# 定義 handler 輸出 sys.stderr
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+# 設定輸出格式
+formatter = logging.Formatter('%(asctime)s - [%(levelname)s] >>> %(message)s')
+# handler 設定輸出格式
+console.setFormatter(formatter)
+# 加入 hander 到 root logger
+logging.getLogger('').addHandler(console)
+
+# return logger

@@ -15,4 +15,7 @@ def setErrorResponse(responseData):
     responseData['responseMessage'] = 'except'
     return responseData
 
-
+def setErrorResponse(responseData, errorCode, errorMessage):
+    responseData['responseCode'] = errorCode
+    responseData['responseMessage'] = errorMessage
+    return responseData

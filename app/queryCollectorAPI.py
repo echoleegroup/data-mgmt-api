@@ -2,8 +2,9 @@ import socket
 import requests
 import json
 import os
-from log import setLog
+#from log import setLog
 from settings import ENV
+from log import logging
 
 def checkPing(dataCollector):
     condition = "Check/Ping"
@@ -16,8 +17,6 @@ def checkConnect(dataCollector):
 def checkStatus(dataCollector, condition):
     port = "32780"
     ip = "localhost"
-    print(ENV)
-    #setLog.info("ENV: " + ENV)
     if ENV == "dev" or ENV == "staging": #測試機
         port = "32780"
         ip = "10.57.232.105"

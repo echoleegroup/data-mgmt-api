@@ -43,5 +43,5 @@ dependencies:
   - wheel=0.33.4=py36_0
   - win_inet_pton=1.1.0=py36_0
   - wincertstore=0.2=py36h7fe50ca_0
-prefix: C:\Users\foxconn\Anaconda3\envs\data-mgmt-api
+prefix: C:\Users\apfive\Anaconda3\envs\data-mgmt-api-copy
 
