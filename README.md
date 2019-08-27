@@ -14,5 +14,5 @@ http://10.57.232.105:33000/checkLightStatusByDataCollector/A01
 spc_breakoff: 有掉模次的起迄模次號碼與timestamp  
 spc_over_30_timestamp: 模次之間超過30秒的起迄模次號碼與timestamp  
 lastest_spc: 最近一筆模次資料  
-http://10.57.232.105:33000/queryDailyReport/spc/20190806/20190807/  
+http://localhost:33000/queryDailyReport/spc/20190826173000/20190827083000/  
 
