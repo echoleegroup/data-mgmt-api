@@ -1,13 +1,15 @@
+# coding:utf-8
+
 import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
-from service import queryLightStatus, genDailyReport, checkLastSPC
+from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime
 from utils import getDatetime
 # jdbcQuerySolrC
 import prometheus_client
 from prometheus_client import Counter, start_http_server, Gauge
 from prometheus_client.core import CollectorRegistry
-
+from log import logging
 
 from flask import Flask, send_file, render_template, request, url_for, Response
 #from flask_bootstrap import Bootstrap
@@ -56,39 +58,55 @@ def queryFixedMachinestate(data_category):
 #daily report equipment-----start
 @app.route('/queryDailyReport/<string:data_category>/<string:start_ts>/<string:end_ts>/', methods = ['GET'])
 def queryDailyReport(data_category, start_ts, end_ts):
-    source = genDailyReport(data_category, start_ts, end_ts)
+    source = genDailyReport(start_ts, end_ts)
     return source
 #daily report equipment-----end
 
-#燈號顯示-----start
+#query light -----start
 @app.route('/checkLightStatusByDataCollector/<string:data_collector>/', methods = ['GET'])
 def queryLightStatusByDataCollector(data_collector):
     return queryLightStatus(data_collector)
-#燈號顯示-----end
-
-#test jdbc query solr-----start
-# @app.route('/jdbcQuerySolr/', methods = ['GET'])
-# def jdbcQuerySolr():
-#     source = jdbcQuerySolrC()
-#     return source
-#test jdbc query solr-----end
+#query light-----end
 
 #prometheus-----start
-#只能初始化一次
-result_A03 = Gauge("result", "A03: last spc over 60 sec")
+#only init once
+# raw_data_spc_last_spc0 = Gauge("raw_data_spc_last_spc0", "last timestamp whether or not over 5 min", ['machine_id','production_status'])
+raw_data_spc_last_spc0 = Gauge("Last_SPC_0", "last timestamp whether or not over 5 min", ['timestamp','production_status'])
 
-@app.route('/checkLastSPC/<string:data_collector>/metrics', methods = ['GET'])
-def checkLastSPCAPI(data_collector):
-    # try:
-    #flag = checkLastSPC('spc', data_collector)
-    flag = 1
-    #g = Gauge('my_inprogress_requests', 'Description of gauge', ['mylabelname'])
-    #result_A03.labels(A03='str').set(3.6)
+@app.route('/checkLastSPC/<string:data_category>/metrics', methods = ['GET'])
+def checkLastSPCAPI(data_category):
+    try:
+        status = ''
+        result = checkLastSPC('spc', data_category)
+        flag = result[0]
+        timestamp = result[1]
+        if flag == 1:
+            status = 'less5min'
+        else:
+            status = 'over5min'
+        #raw_data_spc_last_spc0.labels(data_category, status).set(flag)
+        raw_data_spc_last_spc0.labels(timestamp, status).set(flag)
+        return Response(prometheus_client.generate_latest(raw_data_spc_last_spc0), mimetype="text/plain")
+    except:
+        return "exception"
 
-    result_A03.set(flag)
-    return Response(prometheus_client.generate_latest(result_A03), mimetype="text/plain")
-    # except:
-    #     return "exception"
+alarmrecords = Gauge("alarmrecord_abnormal", "test", ['RD_618','status'])
+
+@app.route('/checkAlarmrecordStartTime/<string:data_category>/metrics', methods=['GET'])
+def checkAlarmrecordStartTimeAPI(data_category):
+    try:
+        status = ''
+        result = checkAlarmrecordStartTime('alarmrecord', data_category)
+        flag = result[0]
+        RD_618 = result[1]
+        if flag == 1:
+            status = 'normal'
+        else:
+            status = 'starttime_less_than_previous_record'
+        alarmrecords.labels(RD_618, status).set(flag)
+        return Response(prometheus_client.generate_latest(alarmrecords), mimetype="text/plain")
+    except:
+        return "exception"
 
 #prometheus-----end
 
@@ -108,4 +126,4 @@ def route_frontend(path):
 
 if __name__ == "__main__":
     # Only for debugging while developing
-    app.run(host='0.0.0.0', debug=False, port=33000)
+    app.run(host='0.0.0.0', debug=True, port=33000)

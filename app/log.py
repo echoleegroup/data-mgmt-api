@@ -1,3 +1,5 @@
+# coding:utf-8
+
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from settings import LOG_LEVEL, LOG_PATH, LOG_FILE_NAME
@@ -16,7 +18,7 @@ logging.basicConfig(level=logging.DEBUG,
 # loghandler.setFormatter(fileformatter)
 # logging.getLogger('').addHandler(loghandler)
 
-# 定義 handler 輸出 sys.stderr
+# define handler export sys.stderr
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 # 設定輸出格式

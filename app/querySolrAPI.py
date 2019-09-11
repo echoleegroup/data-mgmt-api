@@ -8,29 +8,29 @@ import pytz
 
 from datetime import datetime, time, timedelta
 from utils import getTotalRowsBetweenTwoTimestamp
-from settings import SOLR_PORT, ENV
+from settings import SOLR_PORT, ENV, SERVER_IP
 from log import logging
 
 def queryInfoAll(coreName):
     condition = coreName + '/select?q=*:*&sort=timestamp desc'
     return queryInfo(condition)
 
-def queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndTime):
-    rows = getTotalRowsBetweenTwoTimestamp(validStartTime, validEndTime)
-    #timedelta(seconds=time.altzone())
+def queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndTime, rows):
     # taipei = pytz.timezone('Asia/Taipei')
     # validStartTime.replace(tzinfo=taipei).timestamp()
     condition = coreName + '/select?q=machine_id:' + machineId + ' AND timestamp:[' + str(validStartTime.timestamp())[:-2] \
                            + ' TO ' + str(validEndTime.timestamp())[:-2] + ']' \
                             +'&fl=SPC_0,timestamp,timestamp_iso' \
                            '&sort=SPC_0 asc&rows=' + str(rows)
-                            # '&fq=timestamp:[' + str(validStartTime.timestamp() + 28800)[:-2] \
-                            #  + ' TO ' + str(validEndTime.timestamp() + 28800)[:-2] + ']' \
+    response = queryInfo(condition)
+    return response
 
-    # "q": "machine_id:A01 AND timestamp_iso:[2019-08-26T17:30:00Z TO 2019-08-27T08:30:00Z]",
-    # "fl": "timestamp, SPC_0, timestamp_iso",
-    # "sort": "SPC_0 asc",
-
+def queryDCLogBetweenTimestamp(coreName, machineId, validStartTimeStr, validEndTimeStr, rows):
+    condition = coreName + '/select?q=machine_id:' + machineId + ' AND name:ConnectionTest' \
+                ' AND timestamp:[' + validStartTimeStr \
+                + ' TO ' + str(validEndTimeStr) + ']' \
+                + '&fl=name,timestamp,result' \
+                  '&sort=timestamp asc&rows=' + str(rows)
     response = queryInfo(condition)
     return response
 
@@ -38,17 +38,25 @@ def queryMachinestate(coreName):
     condition = coreName + '/select?q=*:*&fl=MachineState,timestamp_iso&sort=timestamp_iso desc&rows=1'
     return queryInfo(condition)
 
-def queryInfo(selectCondition):
-    logging.info(selectCondition)
-    ip = "localhost"
-    if ENV == "dev": #測試機
-        # ip = "10.57.232.105"
-        ip = "10.160.29.105"
-    res = requests.get("http://" + ip + ":" + SOLR_PORT + "/solr/" + selectCondition)
-    return res.text
-
 def queryLastSPC(coreName, machineId):
     condition = coreName + '/select?q=machine_id:' + machineId + '&fl=SPC_0,timestamp,timestamp_iso' \
-                           '&sort=timestamp desc&rows=1'
+                           '&sort=timestamp_iso desc&rows=1'
     response = queryInfo(condition)
     return response
+
+def queryAlarmrecordStartTime(coreName, machineId):
+    condition = coreName + '/select?q=machine_id:' + machineId + '&fl=RD_618,StartTime,StartTime_iso' \
+                           '&sort=timestamp_iso desc&rows=2'
+    response = queryInfo(condition)
+    return response
+
+def queryInfo(selectCondition):
+    logging.info(selectCondition)
+    # ip = "localhost"
+    # if ENV == "dev":
+    #     # ip = "10.57.232.105"
+    #     ip = "10.160.29.105"
+    res = requests.get("http://" + SERVER_IP + ":" + SOLR_PORT + "/solr/" + selectCondition)
+    return res.text
+
+
