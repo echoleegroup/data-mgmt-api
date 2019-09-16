@@ -3,7 +3,7 @@
 import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
-from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime
+from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC
 from utils import getDatetime
 # jdbcQuerySolrC
 import prometheus_client
@@ -70,7 +70,6 @@ def queryLightStatusByDataCollector(data_collector):
 
 #prometheus-----start
 #only init once
-# raw_data_spc_last_spc0 = Gauge("raw_data_spc_last_spc0", "last timestamp whether or not over 5 min", ['machine_id','production_status'])
 raw_data_spc_last_spc0 = Gauge("Last_SPC_0", "last timestamp whether or not over 5 min", ['timestamp','production_status'])
 
 @app.route('/checkLastSPC/<string:data_category>/metrics', methods = ['GET'])
@@ -90,7 +89,7 @@ def checkLastSPCAPI(data_category):
     except:
         return "exception"
 
-alarmrecords = Gauge("alarmrecord_abnormal", "test", ['RD_618','status'])
+alarmrecords = Gauge("alarmrecord_abnormal", "start_time_abnormal", ['RD_618','status'])
 
 @app.route('/checkAlarmrecordStartTime/<string:data_category>/metrics', methods=['GET'])
 def checkAlarmrecordStartTimeAPI(data_category):
@@ -105,6 +104,24 @@ def checkAlarmrecordStartTimeAPI(data_category):
             status = 'starttime_less_than_previous_record'
         alarmrecords.labels(RD_618, status).set(flag)
         return Response(prometheus_client.generate_latest(alarmrecords), mimetype="text/plain")
+    except:
+        return "exception"
+
+spcrecords = Gauge("spcrecord_abnormal", "spc_record_abnormal", ['RD_618','status'])
+
+@app.route('/checkJumpAndDuplicatedRecord/<string:data_category>/metrics', methods=['GET'])
+def checkJumpAndDuplicatedRecordFromSPCAPI(data_category):
+    try:
+        status = ''
+        result = checkJumpAndDuplicatedRecordFromSPC('spc', data_category)
+        flag = result[0]
+        RD_618 = result[1]
+        if flag == 1:
+            status = 'normal'
+        else:
+            status = 'SPC_0!=RD_618'
+        spcrecords.labels(RD_618, status).set(flag)
+        return Response(prometheus_client.generate_latest(spcrecords), mimetype="text/plain")
     except:
         return "exception"
 

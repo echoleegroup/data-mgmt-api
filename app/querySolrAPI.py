@@ -20,7 +20,7 @@ def queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndT
     # validStartTime.replace(tzinfo=taipei).timestamp()
     condition = coreName + '/select?q=machine_id:' + machineId + ' AND timestamp:[' + str(validStartTime.timestamp())[:-2] \
                            + ' TO ' + str(validEndTime.timestamp())[:-2] + ']' \
-                            +'&fl=SPC_0,timestamp,timestamp_iso' \
+                            +'&fl=SPC_0,timestamp,timestamp_iso,RD_618' \
                            '&sort=SPC_0 asc&rows=' + str(rows)
     response = queryInfo(condition)
     return response
@@ -39,7 +39,7 @@ def queryMachinestate(coreName):
     return queryInfo(condition)
 
 def queryLastSPC(coreName, machineId):
-    condition = coreName + '/select?q=machine_id:' + machineId + '&fl=SPC_0,timestamp,timestamp_iso' \
+    condition = coreName + '/select?q=machine_id:' + machineId + '&fl=SPC_0,timestamp,timestamp_iso,RD_618' \
                            '&sort=timestamp_iso desc&rows=1'
     response = queryInfo(condition)
     return response
