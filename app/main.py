@@ -3,7 +3,7 @@
 import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
-from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC
+from service import queryLightStatus, transferDatetime, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC
 from utils import getDatetime
 # jdbcQuerySolrC
 import prometheus_client
@@ -56,9 +56,15 @@ def queryFixedMachinestate(data_category):
     return source
 
 #daily report equipment-----start
+@app.route('/queryDailyReport/<string:data_category>/<string:start_ts>/', methods = ['GET'])
+def queryDailyReport(data_category, start_ts):
+    source = transferDatetime(start_ts, '')
+    return source
+
+#start_date, end_date
 @app.route('/queryDailyReport/<string:data_category>/<string:start_ts>/<string:end_ts>/', methods = ['GET'])
-def queryDailyReport(data_category, start_ts, end_ts):
-    source = genDailyReport(start_ts, end_ts)
+def queryDailyReportEndTime(data_category, start_ts, end_ts):
+    source = transferDatetime(start_ts, end_ts)
     return source
 #daily report equipment-----end
 

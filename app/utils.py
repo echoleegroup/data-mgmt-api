@@ -31,8 +31,12 @@ def diffTime(startTs, endTs):
     tDelta = abs(startTs - endTs).total_seconds()
     return tDelta
 
-def transferTimezoneTPE():
-    taipei = pytz.timezone('Asia/Taipei')
-    # validStartTime.replace(tzinfo=taipei).timestamp()
-    dt = datetime.datetime.strptime('2015-07-03 20:25', '%Y-%m-%d %H:%M').replace(tzinfo=taipei)
-    return
+#template
+def insertBlockquote(str):
+    return '<blockquote>'+str+'</blockquote>'
+
+def insertTextIndent(str, number):
+    return '<p style="text-indent: ' + number + 'px;">'+str+'</p>'
+
+
+
