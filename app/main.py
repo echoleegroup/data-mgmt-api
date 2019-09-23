@@ -3,8 +3,9 @@
 import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
-from service import queryLightStatus, transferDatetime, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC
+from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC, genDailyReportSimplification
 from utils import getDatetime
+from addSolrData import addOEEData
 # jdbcQuerySolrC
 import prometheus_client
 from prometheus_client import Counter, start_http_server, Gauge
@@ -58,21 +59,28 @@ def queryFixedMachinestate(data_category):
 #daily report equipment-----start
 @app.route('/queryDailyReport/<string:data_category>/<string:start_ts>/', methods = ['GET'])
 def queryDailyReport(data_category, start_ts):
-    source = transferDatetime(start_ts, '')
+    source = genDailyReport(start_ts, '')
     return source
 
 #start_date, end_date
 @app.route('/queryDailyReport/<string:data_category>/<string:start_ts>/<string:end_ts>/', methods = ['GET'])
 def queryDailyReportEndTime(data_category, start_ts, end_ts):
-    source = transferDatetime(start_ts, end_ts)
+    source = genDailyReport(start_ts, end_ts)
     return source
 #daily report equipment-----end
+
+@app.route('/queryDailyReportSimplification/<string:data_category>/<string:start_ts>/', methods = ['GET'])
+def queryDailyReportSimplification(data_category, start_ts):
+    source = genDailyReportSimplification(start_ts, '')
+    return source
+
 
 #query light -----start
 @app.route('/checkLightStatusByDataCollector/<string:data_collector>/', methods = ['GET'])
 def queryLightStatusByDataCollector(data_collector):
     return queryLightStatus(data_collector)
 #query light-----end
+
 
 #prometheus-----start
 #only init once
@@ -132,6 +140,15 @@ def checkJumpAndDuplicatedRecordFromSPCAPI(data_category):
         return "exception"
 
 #prometheus-----end
+
+# test solr add data
+@app.route('/addSolrData/<string:data_category>/', methods=['GET'])
+def addSolrData(data_category):
+    try:
+        addOEEData('oee_test', data_category)
+        return "done"
+    except:
+        return "exception"
 
 # Everything not declared before (not a Flask route / API endpoint)...
 @app.route('/<path:path>')

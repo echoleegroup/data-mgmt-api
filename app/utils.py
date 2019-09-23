@@ -35,8 +35,11 @@ def diffTime(startTs, endTs):
 def insertBlockquote(str):
     return '<blockquote>'+str+'</blockquote>'
 
-def insertTextIndent(str, number):
-    return '<p style="text-indent: ' + number + 'px;">'+str+'</p>'
+def insertTextIndent(str, intentNumber, marginNumber):
+    return '<p style="text-indent: ' + intentNumber + 'px;">'+str+'</p>'
+
+# def insertTextIndent(str, intentNumber, marginNumber):
+#     return '<p style="text-indent: ' + intentNumber + 'px;margin:0em '+ marginNumber + 'em">'+str+'</p>'
 
 
 

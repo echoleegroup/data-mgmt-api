@@ -124,9 +124,9 @@ def transferDatetime(startTs, endTs):
         logging.error(validStartTime + '-' + validEndTime + ' time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S')
         return 'time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S'
 
-    return genDailyReport(validStartTime, validEndTime)
+    return validStartTime, validEndTime
 
-def genDailyReport(validStartTime, validEndTime):
+def genDailyReport(startTs, endTs):
     br = '<br/>'
     responseData = initResponse()
     result = {}
@@ -134,21 +134,13 @@ def genDailyReport(validStartTime, validEndTime):
     responseStr = ''
     # list of data collector
     listOfCollector = ['A01', 'A03', 'A05', 'A06']
-    # validStartTime = ''
-    # validEndTime = ''
 
-    # validEndTime = datetime.now()
-
-    # 轉換開始時間與結束時間
-    # try:
-    #     validStartTime = getDatetime(startTs, "%Y%m%d%H%M%S")
-    #     # validEndTime = getDatetime(endTs, "%Y%m%d%H%M%S")
-    # except ValueError:
-    #     logging.error(validStartTime + '-' + validEndTime + ' time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S')
-    #     responseData = setErrorResponse(responseData, '400', 'time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S')
-    #     return parseResponseJson(responseData, result)
+    datetime = transferDatetime(startTs, endTs)
+    validStartTime = datetime[0]
+    validEndTime = datetime[1]
+    
     responseStr = responseStr + "[數據採集回報 " + validStartTime.strftime("%Y/%m/%d %H:%M:%S")\
-                  + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]" + br
+                   + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]" + br
 
     try:
         for machineId in listOfCollector:
@@ -159,11 +151,13 @@ def genDailyReport(validStartTime, validEndTime):
             df = pd.DataFrame(doc)
 
             responseStr = responseStr + machineId + br
-
+            #query燈號狀態
+            lightResponse = queryLightStatus(machineId)
+            machineStatus = parseLightStatus(lightResponse)
 
             if df.empty:
                 logging.info(coreName  + "/" + machineId + ":" + startTs + '-' + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + ' DataFrame is empty!')
-                responseStr = responseStr + insertTextIndent('此區間沒有生產數據', '20')
+                responseStr = responseStr + insertTextIndent('最新模次：' + machineStatus + '，' + '此區間沒有生產數據', '20', '1')
             else:
                 df.loc[:, 'SPC_0_previous'] = df['SPC_0']
                 # shift 是往下移一個
@@ -184,28 +178,12 @@ def genDailyReport(validStartTime, validEndTime):
                 df.loc[:, 'timestamp_view_previous'] = df['timestamp_view'].shift(1).fillna('-1')
 
                 # 最新模次
-                # query機台狀態
-                lightResponse = queryLightStatus(machineId)
-                data = json.loads(lightResponse)
-                lightColor = data['result']['lightColor']
-                machineStatus = ''
-                if lightColor == 'green':
-                    machineStatus = '機台生產'
-                elif lightColor == 'yellow':
-                    machineStatus = '機台調機'
-                elif lightColor == 'gray':
-                    machineStatus = '機台未開機'
-                elif lightColor == 'icon_disconnected':
-                    machineStatus = '機台未開機'
-                elif lightColor == 'icon_idle':
-                    machineStatus = '機台待機'
-
                 df_lastest = df.iloc[-1:].astype(str)
                 lastTime = df_lastest['timestamp'].values[0]
                 lastTimeStr = df_lastest['timestamp_view_last'].values[0]
                 lastSPC = lastTimeStr + '(' + df_lastest['SPC_0'].values[0] + ')'
 
-                responseStr = responseStr + insertTextIndent('最新模次：' + machineStatus + '，' + lastSPC, '20')
+                responseStr = responseStr + insertTextIndent('最新模次：' + machineStatus + '，' + lastSPC, '20', '1')
 
                 #連線訊息
                 dcCoreName = 'dc_event'
@@ -224,11 +202,6 @@ def genDailyReport(validStartTime, validEndTime):
                     docFalseDF = docDF.where(docDF['result'] == False).dropna().drop_duplicates('timestamp')
                     # for顯示使用
                     docFalseDF.loc[:, 'timestamp_view_temp'] = docFalseDF['timestamp'].str.replace('T',' ').str.replace('Z','').astype(str)
-                    # docFalseDF.loc[:, 'timestamp_view'] = pd.to_datetime(docFalseDF['timestamp_view_temp'],
-                    #                                                      errors='coerce').dt.strftime('%H:%M:%S')
-                    # # date
-                    # docFalseDF.loc[:, 'timestamp_view_date'] = pd.to_datetime(docFalseDF['timestamp_view_temp'],
-                    #                                                           errors='coerce').dt.strftime('%m/%d')
 
                     docFalseDF.loc[:, 'timestamp_view_month'] = pd.to_datetime(docFalseDF['timestamp_view_temp'],
                                                                       errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
@@ -246,41 +219,21 @@ def genDailyReport(validStartTime, validEndTime):
                             lastIndex = index
                         # 找出下一筆恢復連線
                         for index, row in docFalseDF.iterrows():
-                            # docCurDate = row['timestamp_view_date']
-                            # docCurTimestamp = row['timestamp_view']
-                            # if docCurDate != docFirstDate:
-                            #     docFirstDate = docCurDate
-                            #     responseStr = responseStr + insertTextIndent(docFirstDate) + br
-
-                            responseStr = responseStr + insertTextIndent('中斷連線：' + row['timestamp_view_month'], '20')
+                            responseStr = responseStr + insertTextIndent('中斷連線：' + row['timestamp_view_month'], '20', '0')
                             nextIndex = index + 1
                             while index < nextIndex:
                                 isExist = nextIndex in docDF.index
                                 if isExist:
                                     docRow = docDF.ix[[nextIndex]]
                                     docRowResult = docRow['result'].to_string(index=False)
-                                    docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',
-                                                                                                           ' ').str.replace(
-                                        'Z', '').astype(str)
-                                    # docRow.loc[:, 'timestamp_view'] = pd.to_datetime(docRow['timestamp_view_temp'],
-                                    #                                                  errors='coerce').dt.strftime(
-                                    #     '%H:%M:%S')
-                                    # docRowTimestamp = docRow['timestamp_view'].to_string(index=False)
-                                    # # date
-                                    # docRow.loc[:, 'timestamp_view_date'] = pd.to_datetime(
-                                    #     docRow['timestamp_view_temp'], errors='coerce').dt.strftime('%m/%d')
-                                    # docRowDate = docRow['timestamp_view_date'].to_string(index=False)
+                                    docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',' ').str.replace('Z', '').astype(str)
                                     docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
                                         docRow['timestamp_view_temp'],
                                         errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
                                     docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
 
                                     if docRowResult == 'True':
-                                        # 日期
-                                        # if docRowDate != docFirstDate:
-                                        #     docFirstDate = docRowDate
-                                        #     responseStr = responseStr + '   ' + docRowDate + br
-                                        responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20')
+                                        responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
                                         nextIndex = 0
                                     else:
                                         nextIndex = nextIndex + 1
@@ -292,61 +245,12 @@ def genDailyReport(validStartTime, validEndTime):
                 df_broken_spc_0 = df[(df['SPC_0_previous_add1'] != df['SPC_0'])]
                 # 多加一個條件, 排除停機後, spc_0跟上一筆相同的中斷模次
                 df_broken_spc_0 = df_broken_spc_0[(df_broken_spc_0['SPC_0'] != df_broken_spc_0['SPC_0_previous']) | ((df_broken_spc_0['SPC_0'] == df_broken_spc_0['SPC_0_previous']) & (df_broken_spc_0['SPC_0'] != df_broken_spc_0['RD_618']))]
-
-                # remove first row
-                if df_broken_spc_0.size > 1:
-                    df_broken_spc_0 = df_broken_spc_0.iloc[1:]
-
-                    df_broken_spc_0.loc[:, 'SPC_0_break'] = \
-                        df_broken_spc_0['timestamp_view_previous'].astype(str) + '(' + df_broken_spc_0['SPC_0_previous'].astype(str) + ')' \
-                        + ' -> ' + df_broken_spc_0['timestamp_view'].astype(str) + '(' + df_broken_spc_0['SPC_0'].astype(str) + ')'
-
-                spc_0_break_list = df_broken_spc_0[['SPC_0_break', 'timestamp_view_date', 'timestamp_view_date_previous']].values.tolist()
-                if len(spc_0_break_list) == 0:
-                    logging.info('無模次不連續')
-                else:
-                    firstDate = ''
-                    spc_0_break_first = ''
-                    responseStr = responseStr + insertTextIndent('模次不連續：', '20')
-                    spc_0_break_first = df_broken_spc_0.iloc[0].astype(str)
-
-                    for spc_0_break in spc_0_break_list:
-                        if firstDate == '':
-                            firstDate = spc_0_break_first['timestamp_view_date_previous']
-                            responseStr = responseStr + insertTextIndent(firstDate, '30')
-                        elif spc_0_break[2] != firstDate:
-                            firstDate = spc_0_break[2]
-                            responseStr = responseStr + insertTextIndent(spc_0_break[1], '30')
-                        responseStr = responseStr + insertTextIndent(spc_0_break[0], '50')
+                responseStr = parseViewformat(df_broken_spc_0, responseStr, '模次不連續')
 
                 # 模次時間超過五分鐘
-                df['timestamp_previous_add60'] = df['timestamp_previous'] + int(PRODUCTION_DURING_SEC)
-                df_broken_timestamp = df[df['timestamp'].astype(float) > df['timestamp_previous_add60']]
-                # remove first row
-                if df_broken_timestamp.size > 1:
-                    df_broken_timestamp = df_broken_timestamp.iloc[1:]
-
-                    df_broken_timestamp.loc[:, 'SPC_0_break_timestamp'] = \
-                        df_broken_timestamp['timestamp_view_previous'].astype(str) + '(' + df_broken_timestamp['SPC_0_previous'].astype(str) + ')'\
-                        + ' -> ' + df_broken_timestamp['timestamp_view'].astype(str) + '(' + df_broken_timestamp['SPC_0'].astype(str) + ')'
-
-                spc_0_break_timestamp_list = df_broken_timestamp[['SPC_0_break_timestamp', 'timestamp_view_date', 'timestamp_view_date_previous']].values.tolist()
-                if len(spc_0_break_timestamp_list) == 0:
-                    logging.info('無模次生產時間超過5分鐘')
-                else:
-                    firstDate = ''
-                    df_broken_timestamp_first = ''
-                    responseStr = responseStr + insertTextIndent('模次生產時間超過5分鐘：', '20')
-                    df_broken_timestamp_first = df_broken_timestamp.iloc[0].astype(str)
-
-                    for spc_0_break_timestamp in spc_0_break_timestamp_list:
-                        if firstDate == '':
-                            firstDate = df_broken_timestamp_first['timestamp_view_date_previous']
-                            responseStr = responseStr + insertTextIndent(firstDate, '30')
-                        elif spc_0_break_timestamp[2] != firstDate:
-                            firstDate = spc_0_break_timestamp[2]
-                            responseStr = responseStr + insertTextIndent(spc_0_break_timestamp[1], '30')
-                        responseStr = responseStr + insertTextIndent(spc_0_break_timestamp[0], '50')
+                df['timestamp_previous_addInterval'] = df['timestamp_previous'] + int(PRODUCTION_DURING_SEC)
+                df_broken_timestamp = df[df['timestamp'].astype(float) > df['timestamp_previous_addInterval']]
+                responseStr = parseViewformat(df_broken_timestamp, responseStr, '模次生產時間超過5分鐘')
 
             responseStr = responseStr + br
         return responseStr
@@ -355,203 +259,134 @@ def genDailyReport(validStartTime, validEndTime):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result)
 
-# def genDailyReport(startTs, endTs):
-#     responseData = initResponse()
-#     result = {}
-#     result['status'] = ''
-#     responseStr = ''
-#     # list of data collector
-#     listOfCollector = ['A01', 'A03', 'A05', 'A06']
-#     validStartTime = ''
-#     validEndTime = ''
-#     # 轉換開始時間與結束時間
-#     try:
-#         validStartTime = getDatetime(startTs, "%Y%m%d%H%M%S")
-#         validEndTime = getDatetime(endTs, "%Y%m%d%H%M%S")
-#     except ValueError:
-#         logging.error(validStartTime + '-' + validEndTime + ' time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S')
-#         responseData = setErrorResponse(responseData, '400', 'time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S')
-#         return parseResponseJson(responseData, result)
-#     responseStr = responseStr + "[數據採集回報 " + validStartTime.strftime("%Y/%m/%d %H:%M:%S")\
-#                   + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]<br/>"
-#
-#     try:
-#         for machineId in listOfCollector:
-#             coreName = 'spc'
-#             spcRows = getTotalRowsBetweenTwoTimestamp(validStartTime, validEndTime, 10, 1)
-#             response = queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndTime, spcRows)
-#             doc = praseJsonFormat(response)
-#             df = pd.DataFrame(doc)
-#
-#             responseStr = responseStr +  "*" +  machineId + "<br/>"
-#             responseStr = responseStr + " **數據:<br/>"
-#
-#             if df.empty:
-#                 logging.info(coreName  + "/" + machineId + ":" + startTs + '-' + endTs + ' DataFrame is empty!')
-#                 responseStr = responseStr + '   此區間沒有數據產生<br/>'
-#
-#             else:
-#                 df.loc[:, 'SPC_0_previous'] = df['SPC_0']
-#                 # shift 是往下移一個
-#                 df['SPC_0_previous'] = df['SPC_0_previous'].shift(1).fillna('-1').astype(int)
-#                 df.loc[:, 'timestamp_previous'] = df['timestamp'].shift(1).fillna(-1).astype(float)
-#
-#                 #for顯示使用
-#                 df.loc[:, 'timestamp_view_temp'] = df['timestamp_iso'].str.replace('T', ' ').str.replace('Z', '').astype(str)
-#                 df.loc[:, 'timestamp_view'] = pd.to_datetime(df['timestamp_view_temp'], errors='coerce').dt.strftime('%H:%M:%S')
-#
-#                 #last
-#                 df.loc[:, 'timestamp_view_last'] = pd.to_datetime(df['timestamp_view_temp'], errors='coerce').dt.strftime('%m/%d %H:%M:%S')
-#
-#                 #date
-#                 df.loc[:, 'timestamp_view_date'] = pd.to_datetime(df['timestamp_view_temp'], errors='coerce').dt.strftime('%m/%d')
-#                 df.loc[:, 'timestamp_view_date_previous'] = df['timestamp_view_date'].shift(1).fillna('-1')
-#
-#                 df.loc[:, 'timestamp_view_previous'] = df['timestamp_view'].shift(1).fillna('-1')
-#
-#                 # 一.數據檢查:
-#                 # 1.目前最新模次與timestamp
-#                 df_lastest = df.iloc[-1:].astype(str)
-#                 lastTime = df_lastest['timestamp'].values[0]
-#                 lastTimeStr = df_lastest['timestamp_view_last'].values[0]
-#                 responseStr = responseStr + '(1)目前最新模次與時間:<br/>'
-#
-#                 tDelta = diffTime(getDatetimeFromUnix(lastTime), validEndTime)
-#                 if tDelta < int(PRODUCTION_DURING_SEC):
-#                     responseStr = responseStr + '   生產中，'
-#                 else:
-#                     responseStr = responseStr + '   停止生產，'
-#
-#                 lastSPC = df_lastest['SPC_0'].values[0] + '(' + lastTimeStr + ')'
-#                 responseStr = responseStr + lastSPC + '<br/>'
-#
-#                 # 2.檢查中斷模次
-#                 df.loc[:, 'SPC_0_previous_add1'] = df['SPC_0_previous'] + 1
-#                 df_broken_spc_0 = df[(df['SPC_0_previous_add1'] != df['SPC_0'])]
-#                 # 多加一個條件, 排除停機後, spc_0跟上一筆相同的中斷模次
-#                 df_broken_spc_0 = df_broken_spc_0[ (df_broken_spc_0['SPC_0'] != df_broken_spc_0['SPC_0_previous']) | ((df_broken_spc_0['SPC_0'] == df_broken_spc_0['SPC_0_previous']) & (df_broken_spc_0['SPC_0'] != df_broken_spc_0['RD_618']))]
-#
-#                 # remove first row
-#                 df_broken_spc_0 = df_broken_spc_0.iloc[1:]
-#
-#                 df_broken_spc_0.loc[:, 'SPC_0_break'] = \
-#                     df_broken_spc_0['SPC_0_previous'].astype(str) \
-#                     + ' -> ' + df_broken_spc_0['SPC_0'].astype(str)
-#
-#                 responseStr = responseStr + '(2)中斷模次:<br/>'
-#                 spc_0_break_list = df_broken_spc_0['SPC_0_break'].tolist()
-#                 if len(spc_0_break_list) == 0:
-#                     responseStr = responseStr + '   無<br/>'
-#                 for spc_0_break in spc_0_break_list:
-#                     responseStr = responseStr + '   ' + spc_0_break + '<br/>'
-#
-#                 # 3.檢查模次與模次之前timestamp超過1分鐘
-#                 df['timestamp_previous_add60'] = df['timestamp_previous'] + int(PRODUCTION_DURING_SEC)
-#                 df_broken_timestamp = df[df['timestamp'].astype(float) > df['timestamp_previous_add60']]
-#                 # remove first row
-#                 if df_broken_timestamp.size > 1:
-#                     df_broken_timestamp = df_broken_timestamp.iloc[1:]
-#
-#                     df_broken_timestamp.loc[:, 'SPC_0_break_timestamp'] = \
-#                         df_broken_timestamp['SPC_0_previous'].astype(str) + '(' + df_broken_timestamp[
-#                             'timestamp_view_previous'].astype(str) + ')'\
-#                         + ' -> ' + df_broken_timestamp['SPC_0'].astype(str) + '(' + df_broken_timestamp[
-#                             'timestamp_view'].astype(str) + ')'
-#
-#                 responseStr = responseStr + '(3)模次與模次之間生產時間超過1分鐘:<br/>'
-#                 firstDate = ''
-#                 df_broken_timestamp_first = ''
-#                 spc_0_break_timestamp_list = df_broken_timestamp[['SPC_0_break_timestamp', 'timestamp_view_date', 'timestamp_view_date_previous']].values.tolist()
-#                 if len(spc_0_break_timestamp_list) == 0:
-#                     responseStr = responseStr + '   無<br/>'
-#                 else:
-#                     df_broken_timestamp_first = df_broken_timestamp.iloc[0].astype(str)
-#
-#                 for spc_0_break_timestamp in spc_0_break_timestamp_list:
-#                     if firstDate == '':
-#                         firstDate = df_broken_timestamp_first['timestamp_view_date_previous']
-#                         responseStr = responseStr + '   ' + firstDate + '<br/>'
-#                     elif spc_0_break_timestamp[2] != firstDate:
-#                         firstDate = spc_0_break_timestamp[2]
-#                         responseStr = responseStr + '   ' + spc_0_break_timestamp[1] + '<br/>'
-#                     responseStr = responseStr + '   ' + spc_0_break_timestamp[0] + '<br/>'
-#
-#
-#             # 二、連線檢查:
-#             dcCoreName = 'dc_event'
-#             dcRows = getTotalRowsBetweenTwoTimestamp(validStartTime, validEndTime, 3, 4)
-#             validStartTimeStr = convertDatetimeToString(validStartTime, "%Y-%m-%dT%H:%M:%SZ")
-#             validEndTimeStr = convertDatetimeToString(validEndTime, "%Y-%m-%dT%H:%M:%SZ")
-#             dcResponse = queryDCLogBetweenTimestamp(dcCoreName, machineId, validStartTimeStr, validEndTimeStr, dcRows)
-#             dcDoc = praseJsonFormat(dcResponse)
-#             docDF = pd.DataFrame(dcDoc)
-#
-#             responseStr = responseStr + " ** 連線:<br/>"
-#             if docDF.empty:
-#                 logging.info(dcCoreName + "/" + machineId + ":" + startTs + '-' + endTs + ' 連線資訊 is empty!')
-#                 responseStr = responseStr + '   此區間沒有連線紀錄<br/>'
-#             else:
-#                 docFalseDF = docDF.where(docDF['result'] == False).dropna().drop_duplicates('timestamp')
-#                 # for顯示使用
-#                 docFalseDF.loc[:, 'timestamp_view_temp'] = docFalseDF['timestamp'].str.replace('T', ' ').str.replace('Z', '').astype(str)
-#                 docFalseDF.loc[:, 'timestamp_view'] = pd.to_datetime(docFalseDF['timestamp_view_temp'], errors='coerce').dt.strftime('%H:%M:%S')
-#                 # date
-#                 docFalseDF.loc[:, 'timestamp_view_date'] = pd.to_datetime(docFalseDF['timestamp_view_temp'], errors='coerce').dt.strftime('%m/%d')
-#
-#                 if docFalseDF['result'].count() == 0:
-#                     responseStr = responseStr + " 未發生斷線問題<br/>"
-#                 else:#發生斷線問題
-#                     docFirstDate = ''
-#                     lastIndex = 0
-#                     # 刪除下一筆連續中斷的連線
-#                     for index, row in docFalseDF.iterrows():
-#                         if lastIndex + 1 == index:
-#                             docFalseDF = docFalseDF.drop(index)
-#                         lastIndex = index
-#                     #找出下一筆恢復連線
-#                     for index, row in docFalseDF.iterrows():
-#                         docCurDate = row['timestamp_view_date']
-#                         docCurTimestamp = row['timestamp_view']
-#                         if docFirstDate == '':
-#                             docFirstDate = docCurDate
-#                             responseStr = responseStr + '   ' + docFirstDate + '<br/>'
-#                         elif docCurDate != docFirstDate:
-#                             docFirstDate = docCurDate
-#                             responseStr = responseStr + '   ' + docCurDate + '<br/>'
-#                         responseStr = responseStr + '   ' + docCurTimestamp + ' 連線中斷' +'<br/>'
-#                         nextIndex = index + 1
-#                         while index < nextIndex:
-#                             isExist = nextIndex in docDF.index
-#                             if isExist:
-#                                 docRow = docDF.ix[[nextIndex]]
-#                                 docRowResult = docRow['result'].to_string(index=False)
-#                                 docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T', ' ').str.replace('Z', '').astype(str)
-#                                 docRow.loc[:, 'timestamp_view'] = pd.to_datetime(docRow['timestamp_view_temp'],
-#                                                                                      errors='coerce').dt.strftime('%H:%M:%S')
-#                                 docRowTimestamp = docRow['timestamp_view'].to_string(index=False)
-#                                 #date
-#                                 docRow.loc[:, 'timestamp_view_date'] = pd.to_datetime(
-#                                     docRow['timestamp_view_temp'], errors='coerce').dt.strftime('%m/%d')
-#                                 docRowDate = docRow['timestamp_view_date'].to_string(index=False)
-#
-#                                 if docRowResult == 'True':
-#                                     # 日期
-#                                     if docRowDate != docFirstDate:
-#                                         docFirstDate = docRowDate
-#                                         responseStr = responseStr + '   ' + docRowDate + '<br/>'
-#                                     responseStr = responseStr + '   ' + docRowTimestamp + ' 恢復連線' + '<br/>'
-#                                     nextIndex = 0
-#                                 else:
-#                                     nextIndex = nextIndex + 1
-#                             else:
-#                                 break
-#
-#             responseStr = responseStr + '<br/>'
-#         return responseStr
-#     except:
-#         logging.error("genDailyReport exception")
-#         responseData = setErrorResponse(responseData, '400', 'exception')
-#         return parseResponseJson(responseData, result)
+
+def genDailyReportSimplification(startTs, endTs):
+    br = '<br/>'
+    responseData = initResponse()
+    result = {}
+    result['status'] = ''
+    responseStr = ''
+    # list of data collector
+    listOfCollector = ['A01', 'A03', 'A05', 'A06']
+
+    datetime = transferDatetime(startTs, endTs)
+    validStartTime = datetime[0]
+    validEndTime = datetime[1]
+
+    responseStr = responseStr + "[數據採集回報 " + validStartTime.strftime("%Y/%m/%d %H:%M:%S") \
+                  + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]" + br
+
+    try:
+        for machineId in listOfCollector:
+            coreName = 'spc'
+            spcRows = getTotalRowsBetweenTwoTimestamp(validStartTime, validEndTime, 10, 1)
+            response = queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndTime, spcRows)
+            doc = praseJsonFormat(response)
+            df = pd.DataFrame(doc)
+
+            responseStr = responseStr + machineId + br
+            # query燈號狀態
+            lightResponse = queryLightStatus(machineId)
+            machineStatus = parseLightStatus(lightResponse)
+
+            if df.empty:
+                logging.info(coreName + "/" + machineId + ":" + startTs + '-' + validEndTime.strftime(
+                    "%Y/%m/%d %H:%M:%S") + ' DataFrame is empty!')
+                responseStr = responseStr + insertTextIndent('目前機台狀態：' + machineStatus + '，' + '此區間沒有生產數據', '20', '1')
+            else:
+                df.loc[:, 'SPC_0_previous'] = df['SPC_0']
+                # shift 是往下移一個
+                df['SPC_0_previous'] = df['SPC_0_previous'].shift(1).fillna('-1').astype(int)
+                df.loc[:, 'timestamp_previous'] = df['timestamp'].shift(1).fillna(-1).astype(float)
+
+                # for顯示使用
+                df.loc[:, 'timestamp_view_temp'] = df['timestamp_iso'].str.replace('T', ' ').str.replace('Z',
+                                                                                                         '').astype(str)
+                df.loc[:, 'timestamp_view'] = pd.to_datetime(df['timestamp_view_temp'], errors='coerce').dt.strftime(
+                    '%H:%M:%S')
+                # last
+                df.loc[:, 'timestamp_view_last'] = pd.to_datetime(df['timestamp_view_temp'],
+                                                                  errors='coerce').dt.strftime('%m/%d %H:%M:%S')
+                # date
+                df.loc[:, 'timestamp_view_date'] = pd.to_datetime(df['timestamp_view_temp'],
+                                                                  errors='coerce').dt.strftime('%m/%d')
+                df.loc[:, 'timestamp_view_date_previous'] = df['timestamp_view_date'].shift(1).fillna('-1')
+
+                df.loc[:, 'timestamp_view_previous'] = df['timestamp_view'].shift(1).fillna('-1')
+
+                # 最新模次
+                df_lastest = df.iloc[-1:].astype(str)
+                lastTime = df_lastest['timestamp'].values[0]
+                lastTimeStr = df_lastest['timestamp_view_last'].values[0]
+                lastSPC = df_lastest['SPC_0'].values[0] + '(' + lastTimeStr + ')'
+
+                responseStr = responseStr + insertTextIndent('目前機台狀態：' + machineStatus, '20', '1')
+                responseStr = responseStr + insertTextIndent(lastSPC, '50', '1')
+
+                # 生產模次間隔超過五分鐘
+                df['timestamp_previous_addInterval'] = df['timestamp_previous'] + int(PRODUCTION_DURING_SEC)
+                df_broken_timestamp = df[df['timestamp'].astype(float) > df['timestamp_previous_addInterval']]
+                if df_broken_timestamp.size > 1:
+                    filter_df = df_broken_timestamp.iloc[1:]
+                    times_df = filter_df.groupby(["timestamp_view_date_previous"]).size().to_frame(name='count')
+                    if times_df.size > 0:
+                        responseStr = responseStr + insertTextIndent('生產模次間隔超過五分鐘：', '20', '1')
+                        for index, row in times_df.iterrows():
+                            responseStr = responseStr + insertTextIndent(index + ' 發生 ' + str(row['count']) + ' 次', '50', '1')
+
+            responseStr = responseStr + br
+        return responseStr
+    except:
+        logging.error("genDailyReport exception")
+        responseData = setErrorResponse(responseData, '400', 'exception')
+        return parseResponseJson(responseData, result)
+
+def parseViewformat(df, responseStr, topic):
+    # remove first row
+    if df.size > 1:
+        filter_df = df.iloc[1:]
+
+        filter_df.loc[:, 'SPC_0_break'] = \
+            filter_df['timestamp_view_previous'].astype(str) + '(' + filter_df['SPC_0_previous'].astype(
+                str) + ')' \
+            + ' -> ' + filter_df['timestamp_view'].astype(str) + '(' + filter_df['SPC_0'].astype(str) + ')'
+
+    df_list = filter_df[['SPC_0_break', 'timestamp_view_date', 'timestamp_view_date_previous']].values.tolist()
+    if len(df_list) == 0:
+        logging.info('無' + topic)
+    else:
+        firstDate = ''
+        # filter_df_first = ''
+        responseStr = responseStr + insertTextIndent(topic + '：', '20', '1')
+        filter_df_first = filter_df.iloc[0].astype(str)
+
+        for df_row in df_list:
+            if firstDate == '':
+                firstDate = filter_df_first['timestamp_view_date_previous']
+                responseStr = responseStr + insertTextIndent(firstDate, '50', '1')
+            elif df_row[2] != firstDate:
+                firstDate = df_row[2]
+                responseStr = responseStr + insertTextIndent(df_row[1], '50', '1')
+            responseStr = responseStr + insertTextIndent(df_row[0], '70', '1')
+    return responseStr
+
+
+def parseLightStatus(lightResponse):
+    # query機台狀態
+    data = json.loads(lightResponse)
+    lightColor = data['result']['lightColor']
+    machineStatus = ''
+    if lightColor == 'green':
+        machineStatus = '機台生產'
+    elif lightColor == 'yellow':
+        machineStatus = '機台調機'
+    elif lightColor == 'gray':
+        machineStatus = '機台未開機'
+    elif lightColor == 'icon_disconnected':
+        machineStatus = '機台未開機'
+    elif lightColor == 'icon_idle':
+        machineStatus = '機台待機'
+    return machineStatus
 
 #報警規則:
 #1.最近一次生產超過五分鐘
