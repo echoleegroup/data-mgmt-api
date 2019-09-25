@@ -7,7 +7,8 @@ def addOEEData(coreName, data_collector):
     host = SERVER_IP
     port = SOLR_PORT
 
-    url = 'http://10.160.29.112:' + port + '/solr/' + coreName
+    url = 'http://' + host + ':' + port + '/solr/' + coreName
+    # http://10.160.29.112:8983/solr/oee_test
 
     solr = pysolr.Solr(url, timeout=10)
     document = [{
