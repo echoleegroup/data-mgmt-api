@@ -7,11 +7,6 @@ def addOEEData(coreName, data_collector):
     host = SERVER_IP
     port = SOLR_PORT
 
-    q = "ipod"
-    fl = "id,name"
-    qt = "select"
-    fq = ""
-    rows = "10"
     url = 'http://10.160.29.112:' + port + '/solr/' + coreName
 
     solr = pysolr.Solr(url, timeout=10)

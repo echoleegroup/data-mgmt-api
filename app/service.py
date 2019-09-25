@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import numpy as np
 
 from querySolrAPI import queryInfoAll,queryInfoBetweenTimestampSPC0, queryDCLogBetweenTimestamp, queryMachinestate, \
-    queryLastSPC, queryAlarmrecordStartTime
+    queryLastSPC, queryAlarmrecord, queryOEE
 from queryCollectorAPI import checkPing, checkConnect
 from utils import praseJsonFormat, getDatetime, diffTime, getDatetimeFromUnix, getTotalRowsBetweenTwoTimestamp, convertDatetimeToString, insertBlockquote, insertTextIndent
 from model.response import initResponse, parseResponseJson, setErrorResponse
@@ -32,7 +32,7 @@ def queryLightStatus(data_collector):
             result['lightColor'] = 'none'
             result['status'] = "no match machine id"
             responseData = setErrorResponse(responseData, '404', 'collector machine_id not found')
-            return parseResponseJson(responseData, result)
+            return parseResponseJson(responseData, result, 'result')
         #先判斷是否ping的到
         try:
             pingStatus = checkPing(data_collector)
@@ -40,11 +40,11 @@ def queryLightStatus(data_collector):
             logging.error("queryLightStatus exception --> ping fail ")
             result['lightColor'] = 'gray'
             result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
-            return parseResponseJson(responseData, result)
+            return parseResponseJson(responseData, result, 'result')
         if pingStatus == "False":
             result['lightColor'] = 'gray'
             result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
-            return parseResponseJson(responseData, result)
+            return parseResponseJson(responseData, result, 'result')
         else:
             result['status'] = result['status'] + "ping=success; "
         #再判斷是否連結的到collector
@@ -54,11 +54,11 @@ def queryLightStatus(data_collector):
             #print("queryLightStatus exception --> connection fail ")
             result['lightColor'] = 'icon_disconnected'
             result['status'] = result['status'] + "connection=fail; 請檢查控制器"
-            return parseResponseJson(responseData, result)
+            return parseResponseJson(responseData, result, 'result')
         if connectionStatus == "False":
             result['lightColor'] = 'icon_disconnected'
             result['status'] = result['status'] + "connection=fail; 請檢查控制器"
-            return parseResponseJson(responseData, result)
+            return parseResponseJson(responseData, result, 'result')
         else:
             result['status'] = result['status'] + "connection=success; "
         #query machine status
@@ -76,7 +76,7 @@ def queryLightStatus(data_collector):
             logging.error('parse solr api response exception -> queryMachinestate')
             result['lightColor'] = 'none'  # parse solr api response exception
             result['status'] = result['status'] + "machineStatus=none(call solr api or parse response exception) -> queryMachinestate"
-            return parseResponseJson(responseData, result)
+            return parseResponseJson(responseData, result, 'result')
         if machineStatus == "全自動":
             # 全自動才判斷生產狀態
             # query spc status
@@ -102,14 +102,14 @@ def queryLightStatus(data_collector):
                 result['lightColor'] = 'none'  # parse solr api response exception
                 result['status'] = result[
                                        'status'] + "machineStatus=none(call solr api or parse response exception) -> queryLastSPC"
-                return parseResponseJson(responseData, result)
+                return parseResponseJson(responseData, result, 'result')
         else:
             result['lightColor'] = 'yellow'
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
     except:
         logging.error("queryLightStatus exception")
         setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
 
 def transferDatetime(startTs, endTs):
     validStartTime = ''
@@ -257,7 +257,7 @@ def genDailyReport(startTs, endTs):
     except:
         logging.error("genDailyReport exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
 
 
 def genDailyReportSimplification(startTs, endTs):
@@ -339,7 +339,7 @@ def genDailyReportSimplification(startTs, endTs):
     except:
         logging.error("genDailyReport exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
 
 def parseViewformat(df, responseStr, topic):
     # remove first row
@@ -410,7 +410,7 @@ def checkLastSPC(coreName, machineId):
     except:
         logging.error("checkLastSPC exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
 
 #2.報警紀錄開始時間要大於上一筆
 def checkAlarmrecordStartTime(coreName, machineId):
@@ -420,7 +420,7 @@ def checkAlarmrecordStartTime(coreName, machineId):
     responseStr = ''
     jsonObject = {}
     try:
-        jsonObject = queryAlarmrecordStartTime(coreName, machineId)
+        jsonObject = queryAlarmrecord(coreName, machineId)
         data = praseJsonFormat(jsonObject)
         logging.info(data)
         df = pd.DataFrame(data)
@@ -441,7 +441,7 @@ def checkAlarmrecordStartTime(coreName, machineId):
     except:
         logging.error("checkAlarmrecordStartTime exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
 
 #3.報警紀錄模次亂跳/重複模次
 def checkJumpAndDuplicatedRecordFromSPC(coreName, machineId):
@@ -453,7 +453,7 @@ def checkJumpAndDuplicatedRecordFromSPC(coreName, machineId):
     try:
         jsonObject = queryLastSPC(coreName, machineId)
         data = praseJsonFormat(jsonObject)
-        logging.info(data)
+        # logging.info(data)
         df = pd.DataFrame(data).iloc[0].astype(str)
 
         # 取第一筆
@@ -467,4 +467,108 @@ def checkJumpAndDuplicatedRecordFromSPC(coreName, machineId):
     except:
         logging.error("checkJumpAndDuplicatedRecordFromSPC exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result)
+        return parseResponseJson(responseData, result, 'result')
+
+#4.TPM/OEE alarm record報警
+def checkAlarmrecordData(coreName, startTs, endTs):
+    responseData = initResponse()
+    alertList = []
+    # result['status'] = ''
+    responseStr = ''
+    jsonObject = {}
+    listOfCollector = ['A01', 'A03', 'A05', 'A06']
+
+    datetime = transferDatetime(startTs, endTs)
+    validStartTime = datetime[0]
+    validEndTime = datetime[1]
+    validStartTimeStr = convertDatetimeToString(validStartTime, "%Y-%m-%dT%H:%M:%SZ")
+    validEndTimeStr = convertDatetimeToString(validEndTime, "%Y-%m-%dT%H:%M:%SZ")
+    timestamp = int(validEndTime.timestamp())
+    rows = 5
+    try:
+        for machineId in listOfCollector:
+            jsonObject = queryAlarmrecord(coreName, machineId, validStartTimeStr, validEndTimeStr, rows)
+            data = praseJsonFormat(jsonObject)
+            # logging.info(data)
+            for row in data:
+                alert = {}
+                alert['machineID'] = machineId
+                alert['event'] = row['Item']
+                alert['intervalTime'] = row['StartTime'] + ' ~ ' + row['StopTime']
+                alertList.append(alert)
+        responseData['alertType'] = 'alarmrecord'
+        responseData['alertCount'] = len(alertList)
+        responseData['timestamp'] = timestamp
+        return parseResponseJson(responseData, alertList, 'alert')
+    except:
+        logging.error("checkAlarmrecordStartTime exception")
+        responseData = setErrorResponse(responseData, '400', 'exception')
+        return parseResponseJson(responseData, alertList, 'alert')
+
+#X1.TPM/OEE報警
+def checkOEEPerformance(coreName, machineId):
+    responseData = initResponse()
+    result = {}
+    result['status'] = ''
+    responseStr = ''
+    jsonObject = {}
+    try:
+        jsonObject = queryOEE(coreName, machineId)
+        data = praseJsonFormat(jsonObject)
+        # 取第一筆
+        df = pd.DataFrame(data).iloc[0].astype(str)
+
+        timestamp_iso = df['timestamp_iso']
+        performance = df['performance']
+
+        if float(performance) >= 96:
+            return 1, performance  # true, 大於等於96
+        return 0, performance  # false, 小於96
+
+    except:
+        logging.error("checkOEE exception")
+        responseData = setErrorResponse(responseData, '400', 'exception')
+        return parseResponseJson(responseData, result, 'result')
+
+#X2.TPM/OEE報警
+def checkOEEActivation(coreName, machineId):
+    responseData = initResponse()
+    result = {}
+    result['status'] = ''
+    responseStr = ''
+    jsonObject = {}
+    try:
+        jsonObject = queryOEE(coreName, machineId)
+        data = praseJsonFormat(jsonObject)
+        # 取第一筆
+        df = pd.DataFrame(data).iloc[0].astype(str)
+
+        timestamp_iso = df['timestamp_iso']
+        activation = df['activation']
+
+        if float(activation) >= 80:
+            return 1, activation  # true, 大於等於80
+        return 0, activation  # false, 小於80
+
+    except:
+        logging.error("checkOEE exception")
+        responseData = setErrorResponse(responseData, '400', 'exception')
+        return parseResponseJson(responseData, result, 'result')
+
+#query OEE
+def queryOEEData(coreName, machineId):
+    responseData = initResponse()
+    result = {}
+    result['status'] = ''
+    responseStr = ''
+    jsonObject = {}
+    try:
+        jsonObject = queryOEE(coreName, machineId)
+        data = praseJsonFormat(jsonObject)
+
+        result['data'] = data[0]
+        return parseResponseJson(responseData, result, 'result')
+    except:
+        logging.error("checkOEE exception")
+        responseData = setErrorResponse(responseData, '400', 'exception')
+        return parseResponseJson(responseData, result, 'result')

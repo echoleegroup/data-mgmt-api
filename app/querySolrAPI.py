@@ -28,7 +28,7 @@ def queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndT
 def queryDCLogBetweenTimestamp(coreName, machineId, validStartTimeStr, validEndTimeStr, rows):
     condition = coreName + '/select?q=machine_id:' + machineId + ' AND name:ConnectionTest' \
                 ' AND timestamp:[' + validStartTimeStr \
-                + ' TO ' + str(validEndTimeStr) + ']' \
+                + ' TO ' + validEndTimeStr + ']' \
                 + '&fl=name,timestamp,result' \
                   '&sort=timestamp asc&rows=' + str(rows)
     response = queryInfo(condition)
@@ -44,9 +44,24 @@ def queryLastSPC(coreName, machineId):
     response = queryInfo(condition)
     return response
 
-def queryAlarmrecordStartTime(coreName, machineId):
-    condition = coreName + '/select?q=machine_id:' + machineId + '&fl=RD_618,StartTime,StartTime_iso' \
+def queryAlarmrecord(coreName, machineId):
+    condition = coreName + '/select?q=machine_id:' + machineId + '&fl=RD_618,StartTime,StartTime_iso,Item,StopTime,StopTime_iso' \
                            '&sort=timestamp_iso desc&rows=2'
+    response = queryInfo(condition)
+    return response
+
+def queryAlarmrecord(coreName, machineId, validStartTimeStr, validEndTimeStr, rows):
+    condition = coreName + '/select?q=machine_id:' + machineId + \
+                           ' AND timestamp_iso:[' + validStartTimeStr \
+                           + ' TO ' + validEndTimeStr + ']' \
+                           '&fl=RD_618,StartTime,StartTime_iso,Item,StopTime,StopTime_iso' \
+                           '&sort=timestamp_iso desc&rows=' + str(rows)
+    response = queryInfo(condition)
+    return response
+
+def queryOEE(coreName, machineId):
+    condition = coreName + '/select?q=machine_id:' + machineId + \
+                                                                 '&sort=timestamp_iso desc&rows=2'
     response = queryInfo(condition)
     return response
 

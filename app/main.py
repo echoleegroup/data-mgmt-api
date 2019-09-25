@@ -3,7 +3,8 @@
 import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
-from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC, genDailyReportSimplification
+from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC, \
+    genDailyReportSimplification, queryOEEData, checkOEEPerformance, checkOEEActivation, checkAlarmrecordData
 from utils import getDatetime
 from addSolrData import addOEEData
 # jdbcQuerySolrC
@@ -139,7 +140,62 @@ def checkJumpAndDuplicatedRecordFromSPCAPI(data_category):
     except:
         return "exception"
 
+oeePerformance = Gauge("oeePerformance_abnormal", "oeePerformance_abnormal", ['performance','status'])
+@app.route('/checkOEEPerformance/<string:data_category>/metrics', methods=['GET'])
+def checkOEEPerformanceAPI(data_category):
+    try:
+        status = ''
+        result = checkOEEPerformance('oee_test', data_category)
+        flag = result[0]
+        performance = result[1]
+        if flag == 1:
+            status = 'Performance>=96'
+        else:
+            status = 'Performance<96'
+        oeePerformance.labels(performance, status).set(flag)
+        return Response(prometheus_client.generate_latest(oeePerformance), mimetype="text/plain")
+    except:
+        return "exception"
+
+oeeActivation = Gauge("oeeActivation_abnormal", "oeeActivation_abnormal", ['activation','status'])
+@app.route('/checkOEEActivation/<string:data_category>/metrics', methods=['GET'])
+def checkOEEActivationAPI(data_category):
+    try:
+        status = ''
+        result = checkOEEActivation('oee_test', data_category)
+        flag = result[0]
+        activation = result[1]
+        if flag == 1:
+            status = 'Activation>=80'
+        else:
+            status = 'Activation<80'
+        oeeActivation.labels(activation, status).set(flag)
+        return Response(prometheus_client.generate_latest(oeeActivation), mimetype="text/plain")
+    except:
+        return "exception"
 #prometheus-----end
+
+#OEE api
+@app.route('/getAlarmrecordData/<string:start_ts>/<string:end_ts>/', methods=['GET'])
+def getAlarmrecordData(start_ts, end_ts):
+    try:
+        return checkAlarmrecordData('alarmrecord', start_ts, end_ts)
+    except:
+        return "exception"
+
+# @app.route('/getMachineIdleData/<string:data_category>/<string:start_ts>/<string:end_ts>/', methods=['GET'])
+# def getMachineIdleData(data_category, start_ts, end_ts):
+#     try:
+#         return checkMachineIdleData('alarmrecord', data_category, start_ts, end_ts)
+#     except:
+#         return "exception"
+
+@app.route('/getOEEData/<string:data_category>/', methods=['GET'])
+def getOEEData(data_category):
+    try:
+        return queryOEEData('oee_test', data_category)
+    except:
+        return "exception"
 
 # test solr add data
 @app.route('/addSolrData/<string:data_category>/', methods=['GET'])
@@ -149,6 +205,8 @@ def addSolrData(data_category):
         return "done"
     except:
         return "exception"
+
+
 
 # Everything not declared before (not a Flask route / API endpoint)...
 @app.route('/<path:path>')
@@ -166,4 +224,4 @@ def route_frontend(path):
 
 if __name__ == "__main__":
     # Only for debugging while developing
-    app.run(host='0.0.0.0', debug=True, port=33000)
+    app.run(host='0.0.0.0', debug=False, port=33000)
