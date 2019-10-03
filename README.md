@@ -2,17 +2,27 @@
 
 query solr api and collector api for monitor  
 
-1. 查詢目前最新的SPC模次的資訊(order by timestamp desc)  
-http://10.57.232.105:33000/queryFixedSourceAll/spc/  
-2. 給定特定區間, 查詢SPC模次(order by spc_0 asc)  
-http://10.57.232.105:33000/queryInfoBetweenTimestampSPC0/spc/20190726/20190727/  
-3. 查詢machine status  
-http://10.57.232.105:33000/queryMachinestate/machinestatus/  
-4. 查詢燈號  
-http://10.57.232.105:33000/checkLightStatusByDataCollector/A01  
-5. 查詢DailyReport  
-spc_breakoff: 有掉模次的起迄模次號碼與timestamp  
-spc_over_30_timestamp: 模次之間超過30秒的起迄模次號碼與timestamp  
-lastest_spc: 最近一筆模次資料  
-http://localhost:33000/queryDailyReport/spc/20190826173000/20190827083000/  
+1. 燈號查詢
+    -  queryLightStatusByDataCollector
+        http://10.160.29.105:33000/checkLightStatusByDataCollector/A01
+        
+2.  機台設備daily report A/B版本
+    1.  A(簡易版): queryDailyReport
+        http://10.160.29.105:33000/queryDailyReportSimplification/spc/20190917170000/
+    2.  B(AP5版): queryDailyReportSimplification
+        http://10.160.29.105:33000/queryDailyReport/spc/20190917170000/
+        
+3. 數據監控exporter(透過Promethues發送告警到slack、企業微信)
+    1.  檢查SPC最新模次號的生產時間, 若超過系統時間5分鐘, 觸發報警: checkLastSPC
+    2.  檢查AlarmRecord, 當下報警數據的開始時間必須晚於前一筆的開始時間, 結束時間也晚於前一筆的結束時間: checkAlarmrecordStartTime
+    3.  檢查SPC模次號, 判斷RD_618與SPC_0模次號是否相同, 當兩者不相同, 則觸發報警: checkJumpAndDuplicatedRecord
+
+4. TPM串接告警通知(透過nifi呼叫api發送告警到rabbitMQ)
+    1.  傳送alarmrecord事件: getAlarmrecordData
+        http://10.160.29.112:33000/getAlarmrecordData/20190917170000/20190917180000/
+    2.  生產逾時: getMachineIdleData
+        http://10.160.29.112:33000/getMachineIdleData/20190917170000/
+5. OEE燈號狀態寫入Solr
+    - InsertLightStatus
+        http://10.160.29.105:33000/InsertLightStatus/A01
 
