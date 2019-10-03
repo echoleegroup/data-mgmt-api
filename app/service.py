@@ -8,6 +8,7 @@ import pytz
 import sys
 from datetime import datetime, timezone
 import numpy as np
+import pysolr
 
 from querySolrAPI import queryInfoAll,queryInfoBetweenTimestampSPC0, queryDCLogBetweenTimestamp, queryMachinestate, \
     queryLastSPC, queryAlarmrecord, queryOEE
@@ -16,6 +17,8 @@ from utils import praseJsonFormat, getDatetime, diffTime, getDatetimeFromUnix, g
 from model.response import initResponse, parseResponseJson, setErrorResponse
 from log import logging
 from settings import PRODUCTION_DURING_SEC
+from addSolrData import addLightStatusData
+
 
 def queryLightStatus(data_collector):
     responseData = initResponse()
@@ -111,20 +114,138 @@ def queryLightStatus(data_collector):
         setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result, 'result')
 
-def transferDatetime(startTs, endTs):
-    validStartTime = ''
-    validEndTime = ''
-    try:
-        validStartTime = getDatetime(startTs, "%Y%m%d%H%M%S")
-        if endTs == '':
-            validEndTime = datetime.now()
-        else:
-            validEndTime = getDatetime(endTs, "%Y%m%d%H%M%S")
-    except ValueError:
-        logging.error(validStartTime + '-' + validEndTime + ' time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S')
-        return 'time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S'
 
-    return validStartTime, validEndTime
+def InsertLightStatusToSolr(data_collector):
+    responseData = initResponse()
+    result = {}
+    result['status'] = ''
+    pingStatus = ''
+    connectionStatus = ''
+    machineStatus = ''
+    # 紀錄lightstatus到solr
+    lightstatusData = {}
+
+    try:
+        lightstatusData['machine_id'] = data_collector
+        nowDatetime = datetime.now()
+        nowTimestamp = int(nowDatetime.timestamp())
+        lightstatusData['timestamp'] = nowTimestamp
+        lightstatusData['id'] = data_collector + str(nowTimestamp)
+        lightstatusData['timestamp_iso'] = nowDatetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        #list of data collector
+        listOfCollector = ['A01', 'A03', 'A05', 'A06']
+        if data_collector not in listOfCollector:
+            result['lightColor'] = 'none'
+            result['status'] = "no match machine id"
+            responseData = setErrorResponse(responseData, '404', 'collector machine_id not found')
+            return parseResponseJson(responseData, result, 'result')
+        #先判斷是否ping的到
+        try:
+            pingStatus = checkPing(data_collector)
+        except:
+            logging.error("queryLightStatus exception --> ping fail ")
+            result['lightColor'] = 'gray'
+            result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
+            lightstatusData['light_color'] = 'gray'
+            addLightStatusData('lightstatus', data_collector, [lightstatusData])
+            return parseResponseJson(responseData, result, 'result')
+        if pingStatus == "False":
+            lightstatusData['light_color'] = 'gray'
+            result['lightColor'] = 'gray'
+            result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
+            lightstatusData['light_color'] = 'gray'
+            addLightStatusData('lightstatus', data_collector, [lightstatusData])
+            return parseResponseJson(responseData, result, 'result')
+        else:
+            result['status'] = result['status'] + "ping=success; "
+        #再判斷是否連結的到collector
+        try:
+            connectionStatus = checkConnect(data_collector)
+        except:
+            #print("queryLightStatus exception --> connection fail ")
+            result['lightColor'] = 'icon_disconnected'
+            result['status'] = result['status'] + "connection=fail; 請檢查控制器"
+            lightstatusData['light_color'] = 'icon_disconnected'
+            addLightStatusData('lightstatus', data_collector, [lightstatusData])
+            return parseResponseJson(responseData, result, 'result')
+        if connectionStatus == "False":
+            result['lightColor'] = 'icon_disconnected'
+            result['status'] = result['status'] + "connection=fail; 請檢查控制器"
+            lightstatusData['light_color'] = 'icon_disconnected'
+            addLightStatusData('lightstatus', data_collector, [lightstatusData])
+            return parseResponseJson(responseData, result, 'result')
+        else:
+            result['status'] = result['status'] + "connection=success; "
+        #query machine status
+        try:
+            jsonObject = {}
+            jsonObject = queryMachinestate('machinestatus')
+            data = praseJsonFormat(jsonObject)
+            # logging.info(data)
+            if len(data) > 0:
+                machineStatus = data[0]['MachineState']
+                result['status'] = result['status'] + "machineStatus=" + machineStatus + "; "
+            else:
+                result['status'] = result['status'] + "machineStatus=none(no data)"
+        except:
+            logging.error('parse solr api response exception -> queryMachinestate')
+            result['lightColor'] = 'none'  # parse solr api response exception
+            result['status'] = result['status'] + "machineStatus=none(call solr api or parse response exception) -> queryMachinestate"
+            lightstatusData['light_color'] = 'none'
+            addLightStatusData('lightstatus', data_collector, [lightstatusData])
+            return parseResponseJson(responseData, result, 'result')
+        if machineStatus == "全自動":
+            # 全自動才判斷生產狀態
+            # query spc status
+            try:
+                jsonObject = {}
+                jsonObject = queryLastSPC("spc", data_collector)
+                data = praseJsonFormat(jsonObject)
+                if len(data) > 0:
+                    spc_0 = data[0]['SPC_0']
+                    result['status'] = result['status'] + "spc_0=" + str(spc_0) + "; "
+                    timestamp_iso = data[0]['timestamp_iso']
+                    timestamp = data[0]['timestamp']
+                    result['status'] = result['status'] + "timestamp=" + timestamp_iso.replace('T', ' ').replace('Z', '')
+                    now = datetime.now().timestamp()
+                    if float(timestamp) + 300 < now:  # 超過5分鐘沒有生產 -> 待機中
+                        result['lightColor'] = 'icon_idle'
+                        lightstatusData['light_color'] = 'icon_idle'
+                    else:
+                        result['lightColor'] = 'green'
+                        lightstatusData['light_color'] = 'green'
+                else:
+                    result['status'] = result['status'] + "spc_0=none(no data)"
+            except:
+                logging.error('parse solr api response exception -> queryLastSPC')
+                result['lightColor'] = 'none'  # parse solr api response exception
+                result['status'] = result[
+                                       'status'] + "machineStatus=none(call solr api or parse response exception) -> queryLastSPC"
+                lightstatusData['light_color'] = 'none'
+                addLightStatusData('lightstatus', data_collector, [lightstatusData])
+                return parseResponseJson(responseData, result, 'result')
+        else:
+            result['lightColor'] = 'yellow'
+            lightstatusData['light_color'] = 'yellow'
+        addLightStatusData('lightstatus', data_collector, [lightstatusData])
+        return parseResponseJson(responseData, result, 'result')
+    except:
+        logging.error("queryLightStatus exception")
+        setErrorResponse(responseData, '400', 'exception')
+        return parseResponseJson(responseData, result, 'result')
+
+def transferDatetime(ts):
+    validTime = ''
+    try:
+        if ts == '':
+            validTime = datetime.now()
+        else:
+            validTime = getDatetime(ts, "%Y%m%d%H%M%S")
+    except ValueError:
+        return 'time format invalid, check start time and end time format: %Y/%m/%d %H:%M:%S'
+    return validTime
+
 
 def genDailyReport(startTs, endTs):
     br = '<br/>'
@@ -135,9 +256,8 @@ def genDailyReport(startTs, endTs):
     # list of data collector
     listOfCollector = ['A01', 'A03', 'A05', 'A06']
 
-    datetime = transferDatetime(startTs, endTs)
-    validStartTime = datetime[0]
-    validEndTime = datetime[1]
+    validStartTime = transferDatetime(startTs)
+    validEndTime = transferDatetime(endTs)
     
     responseStr = responseStr + "[數據採集回報 " + validStartTime.strftime("%Y/%m/%d %H:%M:%S")\
                    + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]" + br
@@ -399,7 +519,7 @@ def checkLastSPC(coreName, machineId):
     try:
         jsonObject = queryLastSPC(coreName, machineId)
         data = praseJsonFormat(jsonObject)
-        logging.info(data)
+        # logging.info(data)
         lastTimestamp = float(data[0]['timestamp'])
         #lastTimestamp = datetime.now().timestamp()
         nowSub300 = datetime.now().timestamp() - 300
@@ -422,7 +542,7 @@ def checkAlarmrecordStartTime(coreName, machineId):
     try:
         jsonObject = queryAlarmrecord(coreName, machineId)
         data = praseJsonFormat(jsonObject)
-        logging.info(data)
+        # logging.info(data)
         df = pd.DataFrame(data)
 
         df.loc[:, 'StartTime_previous'] = df['StartTime']
@@ -478,9 +598,8 @@ def checkAlarmrecordData(coreName, startTs, endTs):
     jsonObject = {}
     listOfCollector = ['A01', 'A03', 'A05', 'A06']
 
-    datetime = transferDatetime(startTs, endTs)
-    validStartTime = datetime[0]
-    validEndTime = datetime[1]
+    validStartTime = transferDatetime(startTs)
+    validEndTime = transferDatetime(endTs)
     validStartTimeStr = convertDatetimeToString(validStartTime, "%Y-%m-%dT%H:%M:%SZ")
     validEndTimeStr = convertDatetimeToString(validEndTime, "%Y-%m-%dT%H:%M:%SZ")
     timestamp = int(validEndTime.timestamp())
@@ -505,55 +624,47 @@ def checkAlarmrecordData(coreName, startTs, endTs):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, alertList, 'alert')
 
-#X1.TPM/OEE報警
-def checkOEEPerformance(coreName, machineId):
+#4.TPM/OEE machine idle報警
+def checkMachineIdleData(coreName, nowTs):
     responseData = initResponse()
-    result = {}
-    result['status'] = ''
+    alertList = []
+    # result['status'] = ''
     responseStr = ''
     jsonObject = {}
+    listOfCollector = ['A01', 'A03', 'A05', 'A06']
+
+    validTime = transferDatetime(nowTs)
+    validTimeStr = convertDatetimeToString(validTime, "%Y-%m-%dT%H:%M:%SZ")
+    timestamp = int(validTime.timestamp())
+
     try:
-        jsonObject = queryOEE(coreName, machineId)
-        data = praseJsonFormat(jsonObject)
-        # 取第一筆
-        df = pd.DataFrame(data).iloc[0].astype(str)
+        for machineId in listOfCollector:
+            jsonObject = queryLastSPC(coreName, machineId)
+            data = praseJsonFormat(jsonObject)
 
-        timestamp_iso = df['timestamp_iso']
-        performance = df['performance']
-
-        if float(performance) >= 96:
-            return 1, performance  # true, 大於等於96
-        return 0, performance  # false, 小於96
-
+            for row in data:
+                lastTimestamp = float(row['timestamp'])
+                # nowDatetime = datetime.now()
+                # nowTimestamp = nowDatetime.timestamp()
+                nowSub300 = timestamp - 300
+                lastTimestampIso = row['timestamp_iso'].replace('T', ' ').replace('Z', '')[:19]
+                lastDatetime = datetime.strptime(lastTimestampIso, "%Y-%m-%d %H:%M:%S")
+                if lastTimestamp < nowSub300: #生產時間超過5分鐘
+                    diffTime = str(validTime - lastDatetime)
+                    alert = {}
+                    alert['machineID'] = machineId
+                    alert['spc0'] = row['SPC_0']
+                    alert['lastTimestamp'] = lastTimestampIso
+                    alert['diffTime'] = diffTime
+                    alertList.append(alert)
+        responseData['alertType'] = 'machineidle'
+        responseData['alertCount'] = len(alertList)
+        responseData['timestamp'] = timestamp
+        return parseResponseJson(responseData, alertList, 'alert')
     except:
-        logging.error("checkOEE exception")
+        logging.error("checkAlarmrecordStartTime exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result, 'result')
-
-#X2.TPM/OEE報警
-def checkOEEActivation(coreName, machineId):
-    responseData = initResponse()
-    result = {}
-    result['status'] = ''
-    responseStr = ''
-    jsonObject = {}
-    try:
-        jsonObject = queryOEE(coreName, machineId)
-        data = praseJsonFormat(jsonObject)
-        # 取第一筆
-        df = pd.DataFrame(data).iloc[0].astype(str)
-
-        timestamp_iso = df['timestamp_iso']
-        activation = df['activation']
-
-        if float(activation) >= 80:
-            return 1, activation  # true, 大於等於80
-        return 0, activation  # false, 小於80
-
-    except:
-        logging.error("checkOEE exception")
-        responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result, 'result')
+        return parseResponseJson(responseData, alertList, 'alert')
 
 #query OEE
 def queryOEEData(coreName, machineId):
