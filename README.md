@@ -4,8 +4,7 @@ query solr api and collector api for monitor
 
 1. 燈號查詢
     -  queryLightStatusByDataCollector
-    >
-        `http://10.160.29.105:33000/checkLightStatusByDataCollector/A01`
+    > http://10.160.29.105:33000/checkLightStatusByDataCollector/A01
         
 2.  機台設備daily report A/B版本
     1.  A(簡易版): queryDailyReport
