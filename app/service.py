@@ -389,9 +389,12 @@ def genDailyReportSimplification(startTs, endTs):
     # list of data collector
     listOfCollector = ['A01', 'A03', 'A05', 'A06']
 
-    datetime = transferDatetime(startTs, endTs)
-    validStartTime = datetime[0]
-    validEndTime = datetime[1]
+    # datetime = transferDatetime(startTs, endTs)
+    validStartTime = transferDatetime(startTs)
+    validEndTime = transferDatetime(endTs)
+
+    # validStartTime = datetime[0]
+    # validEndTime = datetime[1]
 
     responseStr = responseStr + "[數據採集回報 " + validStartTime.strftime("%Y/%m/%d %H:%M:%S") \
                   + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]" + br

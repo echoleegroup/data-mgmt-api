@@ -32,4 +32,4 @@ def checkStatus(dataCollector, condition):
         port = "32760"
     res = requests.get("http://" + SERVER_IP + ":" + port + "/" + condition)
     print("http://" + SERVER_IP + ":" + port + "/" + condition)
-    return res.text
+    return res.text.replace("\"", "")

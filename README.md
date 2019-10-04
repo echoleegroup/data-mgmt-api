@@ -22,6 +22,7 @@ query solr api and collector api for monitor
         > http://10.160.29.112:33000/getAlarmrecordData/20190917170000/20190917180000/
     2.  生產逾時: getMachineIdleData
         > http://10.160.29.112:33000/getMachineIdleData/20190917170000/
+        
 5. OEE燈號狀態寫入Solr
     - InsertLightStatus
         > http://10.160.29.105:33000/InsertLightStatus/A01

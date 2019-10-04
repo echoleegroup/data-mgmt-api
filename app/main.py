@@ -4,7 +4,7 @@ import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
 from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC, \
-    genDailyReportSimplification, queryOEEData, checkOEEPerformance, checkOEEActivation, checkAlarmrecordData, checkMachineIdleData, \
+    genDailyReportSimplification, queryOEEData, checkAlarmrecordData, checkMachineIdleData, \
     InsertLightStatusToSolr
 from utils import getDatetime
 from addSolrData import addOEEData, addLightStatusData

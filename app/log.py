@@ -2,7 +2,7 @@
 
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from settings import LOG_LEVEL, LOG_PATH, LOG_FILE_NAME
+from settings import LOG_LEVEL, LOG_PATH, LOG_FILE_NAME, KEEP_LOG_DAYS
 from datetime import datetime
 #def setLog():
 
@@ -10,8 +10,12 @@ from datetime import datetime
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
                     datefmt='%m-%d %H:%M',
-                    handlers=[logging.FileHandler('{}/{:%Y-%m-%d}.log'.format(LOG_PATH, datetime.now()), 'a', 'utf-8')])
+                    # handlers=[logging.FileHandler('{}/{:%Y-%m-%d}.log'.format(LOG_PATH, datetime.now()), 'a', 'utf-8')])
+                    )
 
+# handlers=[logging.handlers.TimedRotatingFileHandler(LOG_PATH, when_to_rotate, interval=1, backupCount=keep_log_days)]
+handler = TimedRotatingFileHandler('{}/{:%Y-%m-%d}.log'.format(LOG_PATH, datetime.now()), when="midnight", interval=1, backupCount=KEEP_LOG_DAYS)
+logging.getLogger('').addHandler(handler)
 # loghandler = logging.handlers.TimedRotatingFileHandler(filename='{}/{}'.format(LOG_PATH, LOG_FILE_NAME), when="midnight", interval=1)
 # loghandler.setLevel(logging.DEBUG)
 # fileformatter = logging.Formatter('%(asctime)s - [%(levelname)s] >>> %(message)s')
