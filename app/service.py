@@ -276,7 +276,7 @@ def genDailyReport(startTs, endTs):
             machineStatus = parseLightStatus(lightResponse)
 
             if df.empty:
-                logging.info(coreName  + "/" + machineId + ":" + startTs + '-' + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + ' DataFrame is empty!')
+                logging.info(coreName + "/" + machineId + ":" + startTs + '-' + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + ' DataFrame is empty!')
                 responseStr = responseStr + insertTextIndent('最新模次：' + machineStatus + '，' + '此區間沒有生產數據', '20', '1')
             else:
                 df.loc[:, 'SPC_0_previous'] = df['SPC_0']
@@ -317,18 +317,16 @@ def genDailyReport(startTs, endTs):
 
                 if docDF.empty:
                     logging.info(dcCoreName + "/" + machineId + ":" + startTs + '-' + endTs + ' connection dataframe is empty!')
-                    # responseStr = responseStr + insertBlockquote('此區間沒有連線紀錄') + br
                 else:
-                    docFalseDF = docDF.where(docDF['result'] == False).dropna().drop_duplicates('timestamp')
+                    docFalseDF = docDF.where(docDF['result'] == False).dropna().drop_duplicates('timestamp').copy()
                     # for顯示使用
-                    docFalseDF.loc[:, 'timestamp_view_temp'] = docFalseDF['timestamp'].str.replace('T',' ').str.replace('Z','').astype(str)
+                    docFalseDF.loc[:, 'timestamp_view_temp'] = docFalseDF['timestamp'].str.replace('T', ' ').str.replace('Z', '').astype(str)
 
                     docFalseDF.loc[:, 'timestamp_view_month'] = pd.to_datetime(docFalseDF['timestamp_view_temp'],
                                                                       errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
 
                     if docFalseDF['result'].count() == 0:
                         logging.info('未發生斷線問題')
-                        # responseStr = responseStr + " 未發生斷線問題" + br
                     else:  # 發生斷線問題
                         docFirstDate = ''
                         lastIndex = 0
@@ -338,27 +336,56 @@ def genDailyReport(startTs, endTs):
                                 docFalseDF = docFalseDF.drop(index)
                             lastIndex = index
                         # 找出下一筆恢復連線
+                        # shift 是往上移一個
+                        docDF.loc[:, 'result_next'] = docDF['result'].shift(-1).astype(bool)
+                        docSameDF = docDF[(docDF['result_next'] != docDF['result'])]
+                        # 紀錄下一個falseIndex
+                        dict = {}
+                        lastFalseIndex = 0
+                        for index, row in docSameDF.iterrows():
+                            if row['result_next'] == False:
+                                lastFalseIndex = index + 1
+                            if lastFalseIndex != 0:
+                                dict[lastFalseIndex] = index + 1
                         for index, row in docFalseDF.iterrows():
                             responseStr = responseStr + insertTextIndent('中斷連線：' + row['timestamp_view_month'], '20', '0')
-                            nextIndex = index + 1
-                            while index < nextIndex:
-                                isExist = nextIndex in docDF.index
-                                if isExist:
-                                    docRow = docDF.ix[[nextIndex]]
-                                    docRowResult = docRow['result'].to_string(index=False)
-                                    docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',' ').str.replace('Z', '').astype(str)
-                                    docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
-                                        docRow['timestamp_view_temp'],
-                                        errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
-                                    docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
+                            isFalseExist = index in dict
+                            if isFalseExist & index != dict[index]:
+                                nextIndex = dict[index]
+                                docRow = docDF.ix[[nextIndex]].copy()
+                                docRowResult = docRow['result'].to_string(index=False)
+                                docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',
+                                                                                                       ' ').str.replace(
+                                    'Z', '').astype(str)
+                                docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
+                                    docRow['timestamp_view_temp'],
+                                    errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
+                                docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
+                                responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
 
-                                    if docRowResult == 'True':
-                                        responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
-                                        nextIndex = 0
-                                    else:
-                                        nextIndex = nextIndex + 1
-                                else:
-                                    break
+                        # for index, row in docFalseDF.iterrows():
+                        #     responseStr = responseStr + insertTextIndent('中斷連線：' + row['timestamp_view_month'], '20', '0')
+                        #     nextIndex = index + 1
+                        #     while index < nextIndex:
+                        #         isExist = nextIndex in docDF.index
+                        #         if isExist:
+                        #             docRow = docDF.ix[[nextIndex]].copy()
+                        #             docRowResult = docRow['result'].to_string(index=False)
+                        #             if docRowResult == 'True':
+                        #                 docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',
+                        #                                                                                        ' ').str.replace(
+                        #                     'Z', '').astype(str)
+                        #                 docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
+                        #                     docRow['timestamp_view_temp'],
+                        #                     errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
+                        #                 docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
+                        #                 responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
+                        #                 # nextIndex = 0
+                        #                 break
+                        #             else:
+                        #                 nextIndex = nextIndex + 1
+                        #         else:
+                        #             break
 
                 # 模次不連續
                 df.loc[:, 'SPC_0_previous_add1'] = df['SPC_0_previous'] + 1
@@ -379,7 +406,6 @@ def genDailyReport(startTs, endTs):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result, 'result')
 
-
 def genDailyReportSimplification(startTs, endTs):
     br = '<br/>'
     responseData = initResponse()
@@ -389,12 +415,8 @@ def genDailyReportSimplification(startTs, endTs):
     # list of data collector
     listOfCollector = ['A01', 'A03', 'A05', 'A06']
 
-    # datetime = transferDatetime(startTs, endTs)
     validStartTime = transferDatetime(startTs)
     validEndTime = transferDatetime(endTs)
-
-    # validStartTime = datetime[0]
-    # validEndTime = datetime[1]
 
     responseStr = responseStr + "[數據採集回報 " + validStartTime.strftime("%Y/%m/%d %H:%M:%S") \
                   + " - " + validEndTime.strftime("%Y/%m/%d %H:%M:%S") + "]" + br
@@ -522,7 +544,6 @@ def checkLastSPC(coreName, machineId):
     try:
         jsonObject = queryLastSPC(coreName, machineId)
         data = praseJsonFormat(jsonObject)
-        # logging.info(data)
         lastTimestamp = float(data[0]['timestamp'])
         #lastTimestamp = datetime.now().timestamp()
         nowSub300 = datetime.now().timestamp() - 300
@@ -592,6 +613,7 @@ def checkJumpAndDuplicatedRecordFromSPC(coreName, machineId):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result, 'result')
 
+
 #4.TPM/OEE alarm record報警
 def checkAlarmrecordData(coreName, startTs, endTs):
     responseData = initResponse()
@@ -611,11 +633,11 @@ def checkAlarmrecordData(coreName, startTs, endTs):
         for machineId in listOfCollector:
             jsonObject = queryAlarmrecord(coreName, machineId, validStartTimeStr, validEndTimeStr, rows)
             data = praseJsonFormat(jsonObject)
-            # logging.info(data)
             for row in data:
                 alert = {}
                 alert['machineID'] = machineId
-                alert['event'] = row['Item']
+                # cc = row["Item"]
+                alert['event'] = row["Item"]
                 alert['intervalTime'] = row['StartTime'] + ' ~ ' + row['StopTime']
                 alertList.append(alert)
         responseData['alertType'] = 'alarmrecord'

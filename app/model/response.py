@@ -1,5 +1,6 @@
 # coding:utf-8
 import json
+import codecs
 
 def initResponse():
     responseData = {}
@@ -9,7 +10,7 @@ def initResponse():
 
 def parseResponseJson(responseData, result, key):
     responseData[key] = result
-    return json.dumps(responseData)
+    return json.dumps(responseData, ensure_ascii=False).encode('utf8')
 
 def setErrorResponse(responseData):
     responseData['responseCode'] = 400

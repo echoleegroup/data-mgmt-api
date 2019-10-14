@@ -67,10 +67,6 @@ def queryOEE(coreName, machineId):
 
 def queryInfo(selectCondition):
     logging.info(selectCondition)
-    # ip = "localhost"
-    # if ENV == "dev":
-    #     # ip = "10.57.232.105"
-    #     ip = "10.160.29.105"
     res = requests.get("http://" + SERVER_IP + ":" + SOLR_PORT + "/solr/" + selectCondition)
     return res.text
 
