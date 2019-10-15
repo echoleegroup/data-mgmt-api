@@ -1,4 +1,4 @@
-name: data-mgmt-api-test
+name: data-mgmt-api
 channels:
   - conda-forge
   - defaults
