@@ -363,30 +363,6 @@ def genDailyReport(startTs, endTs):
                                 docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
                                 responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
 
-                        # for index, row in docFalseDF.iterrows():
-                        #     responseStr = responseStr + insertTextIndent('中斷連線：' + row['timestamp_view_month'], '20', '0')
-                        #     nextIndex = index + 1
-                        #     while index < nextIndex:
-                        #         isExist = nextIndex in docDF.index
-                        #         if isExist:
-                        #             docRow = docDF.ix[[nextIndex]].copy()
-                        #             docRowResult = docRow['result'].to_string(index=False)
-                        #             if docRowResult == 'True':
-                        #                 docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',
-                        #                                                                                        ' ').str.replace(
-                        #                     'Z', '').astype(str)
-                        #                 docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
-                        #                     docRow['timestamp_view_temp'],
-                        #                     errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
-                        #                 docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
-                        #                 responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
-                        #                 # nextIndex = 0
-                        #                 break
-                        #             else:
-                        #                 nextIndex = nextIndex + 1
-                        #         else:
-                        #             break
-
                 # 模次不連續
                 df.loc[:, 'SPC_0_previous_add1'] = df['SPC_0_previous'] + 1
                 df_broken_spc_0 = df[(df['SPC_0_previous_add1'] != df['SPC_0'])]
