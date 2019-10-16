@@ -337,7 +337,7 @@ def genDailyReport(startTs, endTs):
                             lastIndex = index
                         # 找出下一筆恢復連線
                         # shift 是往上移一個
-                        docDF.loc[:, 'result_next'] = docDF['result'].shift(-1).astype(bool)
+                        docDF.loc[:, 'result_next'] = docDF['result'].shift(-1).astype(bool).copy()
                         docSameDF = docDF[(docDF['result_next'] != docDF['result'])]
                         # 紀錄下一個falseIndex
                         dict = {}
@@ -345,23 +345,25 @@ def genDailyReport(startTs, endTs):
                         for index, row in docSameDF.iterrows():
                             if row['result_next'] == False:
                                 lastFalseIndex = index + 1
-                            if lastFalseIndex != 0:
+                            elif lastFalseIndex != 0 | (lastFalseIndex == 0 & row['result'] == False): #第一筆是斷線的時候, 加入第一筆斷線的訊息到dict
                                 dict[lastFalseIndex] = index + 1
+
                         for index, row in docFalseDF.iterrows():
                             responseStr = responseStr + insertTextIndent('中斷連線：' + row['timestamp_view_month'], '20', '0')
                             isFalseExist = index in dict
-                            if isFalseExist & index != dict[index]:
-                                nextIndex = dict[index]
-                                docRow = docDF.ix[[nextIndex]].copy()
-                                docRowResult = docRow['result'].to_string(index=False)
-                                docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',
-                                                                                                       ' ').str.replace(
-                                    'Z', '').astype(str)
-                                docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
-                                    docRow['timestamp_view_temp'],
-                                    errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
-                                docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
-                                responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
+                            if isFalseExist == True:
+                                if index != dict[index]:
+                                    nextIndex = dict[index]
+                                    docRow = docDF.ix[[nextIndex]].copy()
+                                    docRowResult = docRow['result'].to_string(index=False)
+                                    docRow.loc[:, 'timestamp_view_temp'] = docRow['timestamp'].str.replace('T',
+                                                                                                           ' ').str.replace(
+                                        'Z', '').astype(str)
+                                    docRow.loc[:, 'timestamp_view_month'] = pd.to_datetime(
+                                        docRow['timestamp_view_temp'],
+                                        errors='coerce').dt.strftime('%Y/%m/%d %H:%M:%S')
+                                    docRowMonth = docRow['timestamp_view_month'].to_string(index=False)
+                                    responseStr = responseStr + insertTextIndent('恢復連線：' + docRowMonth, '20', '0')
 
                 # 模次不連續
                 df.loc[:, 'SPC_0_previous_add1'] = df['SPC_0_previous'] + 1
