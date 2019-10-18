@@ -5,7 +5,7 @@ import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
 from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC, \
     genDailyReportSimplification, queryOEEData, checkAlarmrecordData, checkMachineIdleData, \
-    InsertLightStatusToSolr
+    queryNewLightStatus
 from utils import getDatetime
 from addSolrData import addOEEData, addLightStatusData
 # jdbcQuerySolrC
@@ -66,9 +66,13 @@ def queryDailyReportSimplification(data_category, start_ts):
 def queryLightStatusByDataCollector(data_collector):
     return queryLightStatus(data_collector)
 
-@app.route('/InsertLightStatus/<string:data_collector>/', methods = ['GET'])
-def InsertLightStatus(data_collector):
-    return InsertLightStatusToSolr(data_collector)
+@app.route('/insertLightStatus/<string:data_collector>/', methods = ['GET'])
+def insertLightStatus(data_collector):
+    return queryNewLightStatus(data_collector, True)
+
+@app.route('/checkNewLightStatusByDataCollector/<string:data_collector>/', methods = ['GET'])
+def checkNewLightStatusByDataCollector(data_collector):
+    return queryNewLightStatus(data_collector, False)
 #query light-----end
 
 
