@@ -614,10 +614,12 @@ def checkAlarmrecordData(coreName, startTs, endTs):
             data = praseJsonFormat(jsonObject)
             for row in data:
                 alert = {}
+                alert['header'] = '機台故障報警'
                 alert['machineID'] = machineId
                 # cc = row["Item"]
                 alert['event'] = row["Item"]
-                alert['intervalTime'] = row['StartTime'] + ' ~ ' + row['StopTime']
+                alert['startTime'] = row['StartTime']
+                alert['stopTime'] = row['StopTime']
                 alertList.append(alert)
         responseData['alertType'] = 'alarmrecord'
         responseData['alertCount'] = len(alertList)
@@ -656,11 +658,11 @@ def checkMachineIdleData(coreName, nowTs):
                 if lastTimestamp < nowSub300: #生產時間超過5分鐘
                     diffTime = str(validTime - lastDatetime)
                     alert = {}
+                    alert['header'] = '機台閒置報警'
                     alert['machineID'] = machineId
-                    alert['spc0'] = row['SPC_0']
-                    alert['lastTimestamp'] = int(lastTimestamp)
-                    alert['lastTime'] = lastTimestampIso
-                    alert['diffTime'] = diffTime
+                    alert['event'] = '已閒置 ' + diffTime
+                    alert['startTime'] = lastTimestampIso
+                    alert['stopTime'] = ''
                     alertList.append(alert)
         responseData['alertType'] = 'machineidle'
         responseData['alertCount'] = len(alertList)
