@@ -1,1 +1,5 @@
+.gitignore
 .idea
+.vscode/
+data-mgmt-api.code-workspace
+
