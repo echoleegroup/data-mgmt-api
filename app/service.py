@@ -3,6 +3,7 @@ from pandas.io.json import json_normalize
 import pandas as pd
 import json
 import pytz
+import pika
 
 #import jaydebeapi
 import sys
@@ -11,7 +12,7 @@ import numpy as np
 import pysolr
 
 from querySolrAPI import queryInfoAll,queryInfoBetweenTimestampSPC0, queryDCLogBetweenTimestamp, queryMachinestate, \
-    queryLastSPC, queryAlarmrecord, queryOEE
+    queryLastSPC, queryAlarmrecord
 from queryCollectorAPI import checkPing, checkConnect
 from utils import praseJsonFormat, getDatetime, diffTime, getDatetimeFromUnix, getTotalRowsBetweenTwoTimestamp, convertDatetimeToString, insertBlockquote, insertTextIndent
 from model.response import initResponse, parseResponseJson, setErrorResponse
@@ -19,97 +20,7 @@ from log import logging
 from settings import PRODUCTION_DURING_SEC
 from addSolrData import addLightStatusData
 
-
-def queryLightStatus(data_collector):
-    responseData = initResponse()
-    result = {}
-    result['status'] = ''
-    pingStatus = ''
-    connectionStatus = ''
-    machineStatus = ''
-
-    try:
-        #list of data collector
-        listOfCollector = ['A01', 'A03', 'A05', 'A06']
-        if data_collector not in listOfCollector:
-            result['lightColor'] = 'none'
-            result['status'] = "no match machine id"
-            responseData = setErrorResponse(responseData, '404', 'collector machine_id not found')
-            return parseResponseJson(responseData, result, 'result')
-        #先判斷是否ping的到
-        try:
-            pingStatus = checkPing(data_collector)
-        except:
-            logging.error("queryLightStatus exception --> ping fail ")
-            result['lightColor'] = 'gray'
-            result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
-            return parseResponseJson(responseData, result, 'result')
-        if pingStatus == "False":
-            result['lightColor'] = 'gray'
-            result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
-            return parseResponseJson(responseData, result, 'result')
-        else:
-            result['status'] = result['status'] + "ping=success; "
-        #再判斷是否連結的到collector
-        try:
-            connectionStatus = checkConnect(data_collector)
-        except:
-            result['lightColor'] = 'icon_disconnected'
-            result['status'] = result['status'] + "connection=fail; 請檢查控制器"
-            return parseResponseJson(responseData, result, 'result')
-        if connectionStatus == "False":
-            result['lightColor'] = 'icon_disconnected'
-            result['status'] = result['status'] + "connection=fail; 請檢查控制器"
-            return parseResponseJson(responseData, result, 'result')
-        else:
-            result['status'] = result['status'] + "connection=success; "
-
-        # query machine status
-        try:
-            jsonObject = {}
-            jsonObject = queryMachinestate('machinestatus')
-            data = praseJsonFormat(jsonObject)
-            # logging.info(data)
-            if len(data) > 0:
-                machineStatus = data[0]['MachineState']
-                result['status'] = result['status'] + "machineStatus=" + machineStatus + "; "
-            else:
-                result['status'] = result['status'] + "machineStatus=none(no data)"
-        except:
-            logging.error('parse solr api response exception -> queryMachinestate')
-            result['lightColor'] = 'none'  # parse solr api response exception
-            result['status'] = result[
-                                   'status'] + "machineStatus=none(call solr api or parse response exception) -> queryMachinestate"
-            return parseResponseJson(responseData, result, 'result')
-
-        if machineStatus == "全自動":
-            # 全自動才判斷生產狀態
-            # query spc status
-            jsonObject = {}
-            jsonObject = queryLastSPC("spc", data_collector)
-            data = praseJsonFormat(jsonObject)
-            if len(data) > 0:
-                spc_0 = data[0]['SPC_0']
-                result['status'] = result['status'] + "spc_0=" + str(spc_0) + "; "
-                timestamp_iso = data[0]['timestamp_iso']
-                timestamp = data[0]['timestamp']
-                result['status'] = result['status'] + "timestamp=" + timestamp_iso.replace('T', ' ').replace('Z', '')
-                now = datetime.now().timestamp()
-                if float(timestamp) + 300 < now:  # 超過5分鐘沒有生產 -> 待機中
-                    result['lightColor'] = 'icon_idle'
-                else:
-                    result['lightColor'] = 'green'
-            else:
-                result['status'] = result['status'] + "spc_0=none(no data)"
-        else:
-            result['lightColor'] = 'yellow'
-        return parseResponseJson(responseData, result, 'result')
-    except:
-        logging.error("queryLightStatus exception")
-        setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result, 'result')
-
-def queryNewLightStatus(data_collector, isInsert):
+def queryLightStatus(data_collector, lightVersion, isInsert):
     responseData = initResponse()
     result = {}
     result['status'] = ''
@@ -118,6 +29,21 @@ def queryNewLightStatus(data_collector, isInsert):
     machineStatus = ''
     # 紀錄lightstatus到solr
     lightstatusData = {}
+
+    # dashboard light color
+    if lightVersion == 'dashboard':
+        pingFail = "gray"
+        iconDisconnected = "icon_disconnected"
+        iconIdle = "icon_idle"
+        auto = "green"
+        halfAutoOrManual = "yellow"
+    # oee light color
+    else:
+        pingFail = "red"
+        iconDisconnected = "gray"
+        iconIdle = "yellow"
+        auto = "green"
+        halfAutoOrManual = "green"
 
     try:
         lightstatusData['machine_id'] = data_collector
@@ -134,40 +60,25 @@ def queryNewLightStatus(data_collector, isInsert):
             result['status'] = "no match machine id"
             responseData = setErrorResponse(responseData, '404', 'collector machine_id not found')
             return parseResponseJson(responseData, result, 'result')
+
         #先判斷是否ping的到
-        try:
-            pingStatus = checkPing(data_collector)
-        except:
-            logging.error("queryLightStatus exception --> ping fail ")
-            result['lightColor'] = 'red'
-            result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
-            lightstatusData['light_color'] = 'red'
-            if isInsert == True:
-                addLightStatusData('lightstatus', data_collector, [lightstatusData])
-            return parseResponseJson(responseData, result, 'result')
+        pingStatus = checkPing(data_collector)
         if pingStatus == "False":
-            result['lightColor'] = 'red'
+            result['lightColor'] = pingFail
             result['status'] = result['status'] + "ping=fail; 請檢查控制器或網路"
-            lightstatusData['light_color'] = 'red'
+            lightstatusData['light_color'] = pingFail
             if isInsert == True:
                 addLightStatusData('lightstatus', data_collector, [lightstatusData])
             return parseResponseJson(responseData, result, 'result')
         else:
             result['status'] = result['status'] + "ping=success; "
+
         #再判斷是否連結的到collector
-        try:
-            connectionStatus = checkConnect(data_collector)
-        except:
-            result['lightColor'] = 'gray'
-            result['status'] = result['status'] + "connection=fail; 請檢查控制器"
-            lightstatusData['light_color'] = 'gray'
-            if isInsert == True:
-                addLightStatusData('lightstatus', data_collector, [lightstatusData])
-            return parseResponseJson(responseData, result, 'result')
+        connectionStatus = checkConnect(data_collector)
         if connectionStatus == "False":
-            result['lightColor'] = 'gray'
+            result['lightColor'] = iconDisconnected
             result['status'] = result['status'] + "connection=fail; 請檢查控制器"
-            lightstatusData['light_color'] = 'gray'
+            lightstatusData['light_color'] = iconDisconnected
             if isInsert == True:
                 addLightStatusData('lightstatus', data_collector, [lightstatusData])
             return parseResponseJson(responseData, result, 'result')
@@ -175,25 +86,14 @@ def queryNewLightStatus(data_collector, isInsert):
             result['status'] = result['status'] + "connection=success; "
 
         # query machine status
-        try:
-            jsonObject = {}
-            jsonObject = queryMachinestate('machinestatus')
-            data = praseJsonFormat(jsonObject)
-            # logging.info(data)
-            if len(data) > 0:
-                machineStatus = data[0]['MachineState']
-                result['status'] = result['status'] + "machineStatus=" + machineStatus + "; "
-            else:
-                result['status'] = result['status'] + "machineStatus=none(no data)"
-        except:
-            logging.error('parse solr api response exception -> queryMachinestate')
-            result['lightColor'] = 'none'  # parse solr api response exception
-            result['status'] = result[
-                                   'status'] + "machineStatus=none(call solr api or parse response exception) -> queryMachinestate"
-            lightstatusData['light_color'] = 'none'
-            if isInsert == True:
-                addLightStatusData('lightstatus', data_collector, [lightstatusData])
-            return parseResponseJson(responseData, result, 'result')
+        jsonObject = {}
+        jsonObject = queryMachinestate('machinestatus')
+        data = praseJsonFormat(jsonObject)
+        if len(data) > 0:
+            machineStatus = data[0]['MachineState']
+            result['status'] = result['status'] + "machineStatus=" + machineStatus + "; "
+        else:
+            result['status'] = result['status'] + "machineStatus=none(no data)"
 
         if machineStatus == "全自動":
             # 全自動才判斷生產狀態
@@ -208,28 +108,29 @@ def queryNewLightStatus(data_collector, isInsert):
                 timestamp = data[0]['timestamp']
                 result['status'] = result['status'] + "timestamp=" + timestamp_iso.replace('T', ' ').replace('Z', '')
                 now = datetime.now().timestamp()
-                if float(timestamp) + 300 < now:  # 超過5分鐘沒有生產 -> 待機中
-                    result['lightColor'] = 'yellow'
-                    lightstatusData['light_color'] = 'yellow'
+                if float(timestamp) + PRODUCTION_DURING_SEC < now:  # 超過5分鐘沒有生產 -> 待機中
+                    result['lightColor'] = iconIdle
+                    lightstatusData['light_color'] = iconIdle
                 else:
-                    result['lightColor'] = 'green'
-                    lightstatusData['light_color'] = 'green'
+                    result['lightColor'] = auto
+                    lightstatusData['light_color'] = auto
             else:
                 result['status'] = result['status'] + "spc_0=none(no data)"
-        else:
-            result['lightColor'] = 'green'
-            lightstatusData['light_color'] = 'green'
+        else: #手動/半自動
+            result['lightColor'] = halfAutoOrManual
+            lightstatusData['light_color'] = halfAutoOrManual
         if isInsert == True:
             addLightStatusData('lightstatus', data_collector, [lightstatusData])
-        # add machine status for TPM APP UI
-        if result['lightColor'] == 'green':
-            result['lightStatus'] = 'run'
-        elif result['lightColor'] == 'red':
-            result['lightStatus'] = 'down'
-        elif result['lightColor'] == 'gray':
-            result['lightStatus'] = 'issued'
-        elif result['lightColor'] == 'yellow':
-            result['lightStatus'] = 'idle'
+        if lightVersion == 'oee':
+            # add machine status for TPM APP UI
+            if result['lightColor'] == auto or result['lightColor'] == halfAutoOrManual:
+                result['lightStatus'] = 'run'
+            elif result['lightColor'] == pingFail:
+                result['lightStatus'] = 'down'
+            elif result['lightColor'] == iconDisconnected:
+                result['lightStatus'] = 'issued'
+            elif result['lightColor'] == iconIdle:
+                result['lightStatus'] = 'idle'
         return parseResponseJson(responseData, result, 'result')
     except:
         logging.error("queryLightStatus exception")
@@ -513,7 +414,7 @@ def parseLightStatus(lightResponse):
     return machineStatus
 
 #報警規則:
-#1.最近一次生產超過五分鐘
+#Prometheus 1.最近一次生產超過五分鐘
 def checkLastSPC(coreName, machineId):
     responseData = initResponse()
     result = {}
@@ -525,7 +426,7 @@ def checkLastSPC(coreName, machineId):
         data = praseJsonFormat(jsonObject)
         lastTimestamp = float(data[0]['timestamp'])
         #lastTimestamp = datetime.now().timestamp()
-        nowSub300 = datetime.now().timestamp() - 300
+        nowSub300 = datetime.now().timestamp() - PRODUCTION_DURING_SEC
         lastTimestampIso = data[0]['timestamp_iso'].replace('T', ' ').replace('Z', '')[:19]
         if lastTimestamp > nowSub300:
             return 1, lastTimestampIso #true, 小於5分鐘
@@ -535,7 +436,7 @@ def checkLastSPC(coreName, machineId):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result, 'result')
 
-#2.報警紀錄開始時間要大於上一筆
+#Prometheus 2.報警紀錄開始時間要大於上一筆
 def checkAlarmrecordStartTime(coreName, machineId):
     responseData = initResponse()
     result = {}
@@ -566,7 +467,7 @@ def checkAlarmrecordStartTime(coreName, machineId):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result, 'result')
 
-#3.報警紀錄模次亂跳/重複模次
+#Prometheus 3.報警紀錄模次亂跳/重複模次
 def checkJumpAndDuplicatedRecordFromSPC(coreName, machineId):
     responseData = initResponse()
     result = {}
@@ -592,7 +493,6 @@ def checkJumpAndDuplicatedRecordFromSPC(coreName, machineId):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, result, 'result')
 
-
 #4.TPM/OEE alarm record報警
 def checkAlarmrecordData(coreName, startTs, endTs):
     responseData = initResponse()
@@ -614,10 +514,12 @@ def checkAlarmrecordData(coreName, startTs, endTs):
             data = praseJsonFormat(jsonObject)
             for row in data:
                 alert = {}
+                alert['header'] = '機台故障報警'
                 alert['machineID'] = machineId
                 # cc = row["Item"]
                 alert['event'] = row["Item"]
-                alert['intervalTime'] = row['StartTime'] + ' ~ ' + row['StopTime']
+                alert['startTime'] = row['StartTime']
+                alert['stopTime'] = row['StopTime']
                 alertList.append(alert)
         responseData['alertType'] = 'alarmrecord'
         responseData['alertCount'] = len(alertList)
@@ -628,7 +530,7 @@ def checkAlarmrecordData(coreName, startTs, endTs):
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, alertList, 'alert')
 
-#4.TPM/OEE machine idle報警
+#5.TPM/OEE machine idle報警
 def checkMachineIdleData(coreName, nowTs):
     responseData = initResponse()
     alertList = []
@@ -648,19 +550,17 @@ def checkMachineIdleData(coreName, nowTs):
 
             for row in data:
                 lastTimestamp = float(row['timestamp'])
-                # nowDatetime = datetime.now()
-                # nowTimestamp = nowDatetime.timestamp()
-                nowSub300 = timestamp - 300
+                nowSub300 = timestamp - PRODUCTION_DURING_SEC
                 lastTimestampIso = row['timestamp_iso'].replace('T', ' ').replace('Z', '')[:19]
                 lastDatetime = datetime.strptime(lastTimestampIso, "%Y-%m-%d %H:%M:%S")
                 if lastTimestamp < nowSub300: #生產時間超過5分鐘
                     diffTime = str(validTime - lastDatetime)
                     alert = {}
+                    alert['header'] = '機台閒置報警'
                     alert['machineID'] = machineId
-                    alert['spc0'] = row['SPC_0']
-                    alert['lastTimestamp'] = int(lastTimestamp)
-                    alert['lastTime'] = lastTimestampIso
-                    alert['diffTime'] = diffTime
+                    alert['event'] = '已閒置 ' + diffTime
+                    alert['startTime'] = lastTimestampIso
+                    alert['stopTime'] = ''
                     alertList.append(alert)
         responseData['alertType'] = 'machineidle'
         responseData['alertCount'] = len(alertList)
@@ -670,21 +570,3 @@ def checkMachineIdleData(coreName, nowTs):
         logging.error("checkAlarmrecordStartTime exception")
         responseData = setErrorResponse(responseData, '400', 'exception')
         return parseResponseJson(responseData, alertList, 'alert')
-
-#query OEE
-def queryOEEData(coreName, machineId):
-    responseData = initResponse()
-    result = {}
-    result['status'] = ''
-    responseStr = ''
-    jsonObject = {}
-    try:
-        jsonObject = queryOEE(coreName, machineId)
-        data = praseJsonFormat(jsonObject)
-
-        result['data'] = data[0]
-        return parseResponseJson(responseData, result, 'result')
-    except:
-        logging.error("checkOEE exception")
-        responseData = setErrorResponse(responseData, '400', 'exception')
-        return parseResponseJson(responseData, result, 'result')

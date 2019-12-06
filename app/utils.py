@@ -10,9 +10,6 @@ def praseJsonFormat(jsonObject):
     return data['response']['docs']
 
 def getTotalRowsBetweenTwoTimestamp(startTs, endTs, secs, num):
-    # startDate = substringToDate(startTs)
-    # endDate = substringToDate(endTs)
-    #tDelta = abs(startDate - endDate).total_seconds()
     tDelta = diffTime(startTs, endTs)
     return math.ceil(tDelta/secs*num)
 
@@ -26,8 +23,6 @@ def getDatetimeFromUnix(ts):
     return datetime.fromtimestamp(int(ts.replace('.','')[:10]))
 
 def diffTime(startTs, endTs):
-    # startDT = datetime.mktime(startISO)
-    # endDT = datetime.mktime(endISO)
     tDelta = abs(startTs - endTs).total_seconds()
     return tDelta
 
@@ -37,9 +32,5 @@ def insertBlockquote(str):
 
 def insertTextIndent(str, intentNumber, marginNumber):
     return '<p style="text-indent: ' + intentNumber + 'px;">'+str+'</p>'
-
-# def insertTextIndent(str, intentNumber, marginNumber):
-#     return '<p style="text-indent: ' + intentNumber + 'px;margin:0em '+ marginNumber + 'em">'+str+'</p>'
-
 
 

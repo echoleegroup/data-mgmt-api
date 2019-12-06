@@ -18,10 +18,6 @@ def checkConnect(dataCollector):
 
 def checkStatus(dataCollector, condition):
     port = "32780"
-    # ip = "localhost"
-    # if ENV == "dev" or ENV == "staging": #測試機
-    #     port = "32780"
-        # ip = "10.57.232.105"
     if dataCollector == "A01":
         port = "32710"
     elif dataCollector == "A03":

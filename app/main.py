@@ -4,39 +4,22 @@ import os
 import json
 from querySolrAPI import queryInfoAll, queryInfoBetweenTimestampSPC0, queryMachinestate
 from service import queryLightStatus, genDailyReport, checkLastSPC, checkAlarmrecordStartTime, checkJumpAndDuplicatedRecordFromSPC, \
-    genDailyReportSimplification, queryOEEData, checkAlarmrecordData, checkMachineIdleData, \
-    queryNewLightStatus
+    genDailyReportSimplification, checkAlarmrecordData, checkMachineIdleData
 from utils import getDatetime
-from addSolrData import addOEEData, addLightStatusData
-# jdbcQuerySolrC
+from addSolrData import addLightStatusData
+
 import prometheus_client
 from prometheus_client import Counter, start_http_server, Gauge
 from prometheus_client.core import CollectorRegistry
 from log import logging
 
 from flask import Flask, send_file, render_template, request, url_for, Response
-#from flask_bootstrap import Bootstrap
-
 app = Flask(__name__)
-#bootstrap = Bootstrap(app) #bootstrap
-
 
 @app.route("/")
 def main():
     dataList = ["spc", "Machine status", "history record", "alarm record", "futaba"]
     return render_template('index.html', dataList=dataList)
-
-@app.route('/queryFixedSourceAll/<string:data_category>/', methods = ['GET'])
-def queryFixedSourceAll(data_category):
-    source = queryInfoAll(data_category)
-    return source
-
-@app.route('/queryInfoBetweenTimestampSPC0/<string:data_category>/<string:machine_id>/<string:start_ts>/<string:end_ts>/', methods = ['GET'])
-def queryFixedInfoBetweenTimestampSPC0(data_category, machine_id, start_ts, end_ts):
-    validStartTime = getDatetime(start_ts)
-    validEndTime = getDatetime(end_ts)
-    source = queryInfoBetweenTimestampSPC0(data_category, machine_id, validStartTime, validEndTime)
-    return source
 
 @app.route('/queryMachinestate/<string:data_category>/', methods = ['GET'])
 def queryFixedMachinestate(data_category):
@@ -64,17 +47,33 @@ def queryDailyReportSimplification(data_category, start_ts):
 #query light -----start
 @app.route('/checkLightStatusByDataCollector/<string:data_collector>/', methods = ['GET'])
 def queryLightStatusByDataCollector(data_collector):
-    return queryLightStatus(data_collector)
+    return queryLightStatus(data_collector, 'dashboard', False)
 
 @app.route('/insertLightStatus/<string:data_collector>/', methods = ['GET'])
 def insertLightStatus(data_collector):
-    return queryNewLightStatus(data_collector, True)
+    return queryLightStatus(data_collector, 'oee', True)
 
 @app.route('/checkNewLightStatusByDataCollector/<string:data_collector>/', methods = ['GET'])
 def checkNewLightStatusByDataCollector(data_collector):
-    return queryNewLightStatus(data_collector, False)
+    return queryLightStatus(data_collector, 'oee', False)
 #query light-----end
 
+
+#alarm api to rabbitMQ-----start
+@app.route('/getAlarmrecordData/<string:start_ts>/<string:end_ts>/', methods=['GET'])
+def getAlarmrecordData(start_ts, end_ts):
+    try:
+        return checkAlarmrecordData('alarmrecord', start_ts, end_ts)
+    except:
+        return "exception"
+
+@app.route('/getMachineIdleData/<string:ts>/', methods=['GET'])
+def getMachineIdleData(ts):
+    try:
+        return checkMachineIdleData('spc', ts)
+    except:
+        return "exception"
+#alarm api to rabbitMQ-----end
 
 #prometheus-----start
 #only init once
@@ -91,7 +90,6 @@ def checkLastSPCAPI(data_category):
             status = 'less5min'
         else:
             status = 'over5min'
-        #raw_data_spc_last_spc0.labels(data_category, status).set(flag)
         raw_data_spc_last_spc0.labels(timestamp, status).set(flag)
         return Response(prometheus_client.generate_latest(raw_data_spc_last_spc0), mimetype="text/plain")
     except:
@@ -134,46 +132,6 @@ def checkJumpAndDuplicatedRecordFromSPCAPI(data_category):
         return "exception"
 #prometheus-----end
 
-#OEE api
-@app.route('/getAlarmrecordData/<string:start_ts>/<string:end_ts>/', methods=['GET'])
-def getAlarmrecordData(start_ts, end_ts):
-    try:
-        return checkAlarmrecordData('alarmrecord', start_ts, end_ts)
-    except:
-        return "exception"
-
-@app.route('/getMachineIdleData/<string:ts>/', methods=['GET'])
-def getMachineIdleData(ts):
-    try:
-        return checkMachineIdleData('spc', ts)
-    except:
-        return "exception"
-
-@app.route('/getOEEData/<string:data_category>/', methods=['GET'])
-def getOEEData(data_category):
-    try:
-        return queryOEEData('oee_test', data_category)
-    except:
-        return "exception"
-
-# test solr add data -- start
-@app.route('/addSolrData/<string:data_category>/', methods=['GET'])
-def addSolrData(data_category):
-    try:
-        addOEEData('oee_test2', data_category)
-        return "done"
-    except:
-        return "exception"
-
-@app.route('/addLightStatus/<string:data_category>/', methods=['GET'])
-def addLightStatus(data_category):
-    try:
-        addLightStatusData('lightstatus', data_category)
-        return "done"
-    except:
-        return "exception"
-# test solr add data -- end
-
 # Everything not declared before (not a Flask route / API endpoint)...
 @app.route('/<path:path>')
 def route_frontend(path):
@@ -186,7 +144,6 @@ def route_frontend(path):
     else:
         index_path = os.path.join(app.static_folder, 'index.html')
         return send_file(index_path)
-
 
 if __name__ == "__main__":
     # Only for debugging while developing

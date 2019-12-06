@@ -16,8 +16,6 @@ def queryInfoAll(coreName):
     return queryInfo(condition)
 
 def queryInfoBetweenTimestampSPC0(coreName, machineId, validStartTime, validEndTime, rows):
-    # taipei = pytz.timezone('Asia/Taipei')
-    # validStartTime.replace(tzinfo=taipei).timestamp()
     condition = coreName + '/select?q=machine_id:' + machineId + ' AND timestamp:[' + str(validStartTime.timestamp())[:-2] \
                            + ' TO ' + str(validEndTime.timestamp())[:-2] + ']' \
                             +'&fl=SPC_0,timestamp,timestamp_iso,RD_618' \
@@ -56,12 +54,6 @@ def queryAlarmrecord(coreName, machineId, validStartTimeStr, validEndTimeStr, ro
                            + ' TO ' + validEndTimeStr + ']' \
                            '&fl=RD_618,StartTime,StartTime_iso,Item,StopTime,StopTime_iso' \
                            '&sort=timestamp_iso desc&rows=' + str(rows)
-    response = queryInfo(condition)
-    return response
-
-def queryOEE(coreName, machineId):
-    condition = coreName + '/select?q=machine_id:' + machineId + \
-                                                                 '&sort=timestamp_iso desc&rows=2'
     response = queryInfo(condition)
     return response
 
